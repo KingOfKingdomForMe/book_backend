@@ -1,0 +1,11 @@
+@BookBackend_HostAddress = http://localhost:5281
+
+GET {{BookBackend_HostAddress}}/todos/
+Accept: application/json
+
+###
+
+GET {{BookBackend_HostAddress}}/todos/1
+Accept: application/json
+
+###

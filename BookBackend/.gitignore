@@ -1,0 +1,25 @@
+# Visual Studio / VS Code
+.vs/
+.vscode/
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Test and package artifacts
+TestResults/
+artifacts/
+*.nupkg
+*.snupkg
+
+# Logs
+*.log
