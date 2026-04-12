@@ -1,6 +1,8 @@
 @ThreeBooks.BookBackend.LoginService_HostAddress = http://localhost:5279
 @accessToken = replace-with-access-token
 @refreshToken = replace-with-refresh-token
+@externalSessionId = replace-with-session-id
+@completionToken = replace-with-completion-token
 
 GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/
 Accept: application/json
@@ -42,5 +44,50 @@ Content-Type: application/json
 GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/users/me
 Authorization: Bearer {{accessToken}}
 Accept: application/json
+
+###
+
+POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/qr/start
+Content-Type: application/json
+
+{
+	"redirectUri": "http://localhost:3000/login/callback"
+}
+
+###
+
+GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/sessions/{{externalSessionId}}?completionToken={{completionToken}}
+Accept: application/json
+
+###
+
+POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/sessions/complete
+Content-Type: application/json
+
+{
+	"sessionId": "{{externalSessionId}}",
+	"completionToken": "{{completionToken}}"
+}
+
+###
+
+POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/official-account/bind/start
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+	"redirectUri": "http://localhost:3000/profile/wechat-callback"
+}
+
+###
+
+POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/sessions/bind-current-user
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+	"sessionId": "{{externalSessionId}}",
+	"completionToken": "{{completionToken}}"
+}
 
 ###

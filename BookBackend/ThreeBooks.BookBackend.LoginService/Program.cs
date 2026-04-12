@@ -30,6 +30,7 @@ app.MapGet("/", () => Results.Ok(new
 })).AllowAnonymous();
 
 app.MapAuthEndpoints();
+app.MapWeChatEndpoints();
 app.MapUserEndpoints();
 app.MapRoleEndpoints();
 

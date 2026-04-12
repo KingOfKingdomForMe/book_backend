@@ -9,6 +9,10 @@ public sealed class LoginDbContext(DbContextOptions<LoginDbContext> options) : D
 
     public DbSet<UserCredential> UserCredentials => Set<UserCredential>();
 
+    public DbSet<ExternalIdentity> ExternalIdentities => Set<ExternalIdentity>();
+
+    public DbSet<ExternalAuthSession> ExternalAuthSessions => Set<ExternalAuthSession>();
+
     public DbSet<Role> Roles => Set<Role>();
 
     public DbSet<Permission> Permissions => Set<Permission>();
@@ -56,6 +60,64 @@ public sealed class LoginDbContext(DbContextOptions<LoginDbContext> options) : D
                 .WithMany(entity => entity.Credentials)
                 .HasForeignKey(entity => entity.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ExternalIdentity>(builder =>
+        {
+            builder.ToTable("external_identities");
+            builder.HasKey(entity => entity.Id);
+            builder.Property(entity => entity.Provider).IsRequired();
+            builder.Property(entity => entity.AppId).HasMaxLength(128).IsRequired();
+            builder.Property(entity => entity.OpenId).HasMaxLength(128).IsRequired();
+            builder.Property(entity => entity.UnionId).HasMaxLength(128);
+            builder.Property(entity => entity.Nickname).HasMaxLength(128);
+            builder.Property(entity => entity.AvatarUrl).HasMaxLength(512);
+            builder.Property(entity => entity.RawProfileJson).HasColumnType("longtext");
+            builder.Property(entity => entity.CreatedAtUtc).HasPrecision(6);
+            builder.Property(entity => entity.UpdatedAtUtc).HasPrecision(6);
+            builder.Property(entity => entity.LastLoginAtUtc).HasPrecision(6);
+            builder.HasIndex(entity => new { entity.Provider, entity.AppId, entity.OpenId }).IsUnique();
+            builder.HasIndex(entity => new { entity.Provider, entity.UnionId });
+            builder.HasOne(entity => entity.User)
+                .WithMany()
+                .HasForeignKey(entity => entity.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ExternalAuthSession>(builder =>
+        {
+            builder.ToTable("external_auth_sessions");
+            builder.HasKey(entity => entity.Id);
+            builder.Property(entity => entity.Purpose).IsRequired();
+            builder.Property(entity => entity.Provider).IsRequired();
+            builder.Property(entity => entity.Status).IsRequired();
+            builder.Property(entity => entity.State).HasMaxLength(128).IsRequired();
+            builder.Property(entity => entity.Nonce).HasMaxLength(128).IsRequired();
+            builder.Property(entity => entity.AppId).HasMaxLength(128);
+            builder.Property(entity => entity.ExternalOpenId).HasMaxLength(128);
+            builder.Property(entity => entity.ExternalUnionId).HasMaxLength(128);
+            builder.Property(entity => entity.ExternalNickname).HasMaxLength(128);
+            builder.Property(entity => entity.ExternalAvatarUrl).HasMaxLength(512);
+            builder.Property(entity => entity.FailureCode).HasMaxLength(64);
+            builder.Property(entity => entity.FailureMessage).HasMaxLength(256);
+            builder.Property(entity => entity.RedirectUri).HasMaxLength(512);
+            builder.Property(entity => entity.CompletionTokenHash).HasMaxLength(128);
+            builder.Property(entity => entity.ExpiresAtUtc).HasPrecision(6);
+            builder.Property(entity => entity.AuthorizedAtUtc).HasPrecision(6);
+            builder.Property(entity => entity.CompletedAtUtc).HasPrecision(6);
+            builder.Property(entity => entity.ConsumedAtUtc).HasPrecision(6);
+            builder.Property(entity => entity.CreatedAtUtc).HasPrecision(6);
+            builder.Property(entity => entity.UpdatedAtUtc).HasPrecision(6);
+            builder.HasIndex(entity => entity.State).IsUnique();
+            builder.HasIndex(entity => new { entity.Provider, entity.Status, entity.ExpiresAtUtc });
+            builder.HasOne(entity => entity.RequestedByUser)
+                .WithMany()
+                .HasForeignKey(entity => entity.RequestedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            builder.HasOne(entity => entity.ResolvedUser)
+                .WithMany()
+                .HasForeignKey(entity => entity.ResolvedUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Role>(builder =>

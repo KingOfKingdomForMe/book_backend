@@ -177,6 +177,25 @@ public sealed class AuthService(
         return await IssueAuthenticationResponseAsync(user, context, cancellationToken, "auth.login.password");
     }
 
+    public async Task<AuthenticationResponse> SignInUserAsync(
+        Guid userId,
+        RequestContext context,
+        string auditAction,
+        CancellationToken cancellationToken)
+    {
+        var user = await QueryUserGraph()
+            .FirstOrDefaultAsync(entity => entity.Id == userId, cancellationToken)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, "User was not found.");
+
+        if (!user.IsActive)
+        {
+            throw new ApiException(StatusCodes.Status403Forbidden, "The user account is disabled.");
+        }
+
+        user.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        return await IssueAuthenticationResponseAsync(user, context, cancellationToken, auditAction);
+    }
+
     public async Task<AuthenticationResponse> RefreshAsync(
         RefreshTokenRequest request,
         RequestContext context,

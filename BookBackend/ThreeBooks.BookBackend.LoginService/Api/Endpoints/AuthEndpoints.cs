@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using ThreeBooks.BookBackend.LoginService.Application.Abstractions;
 using ThreeBooks.BookBackend.LoginService.Contracts.Requests;
 using ThreeBooks.BookBackend.LoginService.Contracts.Responses;

@@ -10,6 +10,7 @@ using ThreeBooks.BookBackend.LoginService.Api.ErrorHandling;
 using ThreeBooks.BookBackend.LoginService.Application.Abstractions;
 using ThreeBooks.BookBackend.LoginService.Application.Services;
 using ThreeBooks.BookBackend.LoginService.Domain.Entities;
+using ThreeBooks.BookBackend.LoginService.Infrastructure.External.WeChat;
 using ThreeBooks.BookBackend.LoginService.Infrastructure.Persistence;
 using ThreeBooks.BookBackend.LoginService.Infrastructure.Seeding;
 using ThreeBooks.BookBackend.LoginService.Options;
@@ -30,6 +31,9 @@ public static class ServiceCollectionExtensions
         services.Configure<PasswordPolicyOptions>(configuration.GetSection(PasswordPolicyOptions.SectionName));
         services.Configure<LoginLockoutOptions>(configuration.GetSection(LoginLockoutOptions.SectionName));
         services.Configure<SeedAdminOptions>(configuration.GetSection(SeedAdminOptions.SectionName));
+        services.Configure<ExternalAuthOptions>(configuration.GetSection(ExternalAuthOptions.SectionName));
+        services.Configure<WeChatOpenPlatformOptions>(configuration.GetSection(WeChatOpenPlatformOptions.SectionName));
+        services.Configure<WeChatOfficialAccountOptions>(configuration.GetSection(WeChatOfficialAccountOptions.SectionName));
 
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
         if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey) || jwtOptions.SigningKey.Length < 32)
@@ -82,9 +86,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IExternalAuthService, ExternalAuthService>();
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<LoginDbSeeder>();
+        services.AddHttpClient<IWeChatAuthClient, WeChatAuthClient>();
 
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>

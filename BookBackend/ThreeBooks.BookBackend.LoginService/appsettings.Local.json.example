@@ -1,5 +1,20 @@
 {
   "ConnectionStrings": {
     "LoginDb": "Server=localhost;Port=3306;Database=threebooks_login_dev;User=your_user;Password=your_password;CharSet=utf8mb4;AllowUserVariables=True"
+  },
+  "WeChat": {
+    "OpenPlatform": {
+      "Enabled": true,
+      "AppId": "your-open-platform-app-id",
+      "AppSecret": "your-open-platform-app-secret",
+      "CallbackUrl": "https://your-public-domain/auth/wechat/qr/callback"
+    },
+    "OfficialAccount": {
+      "Enabled": true,
+      "AppId": "your-official-account-app-id",
+      "AppSecret": "your-official-account-app-secret",
+      "CallbackUrl": "https://your-public-domain/auth/wechat/official-account/callback",
+      "RequireUserInfoScope": true
+    }
   }
 }

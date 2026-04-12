@@ -65,6 +65,43 @@ public sealed class SeedAdminOptions
     public string[] Roles { get; set; } = [SystemRoles.Admin];
 }
 
+public sealed class ExternalAuthOptions
+{
+    public const string SectionName = "ExternalAuth";
+
+    public int SessionLifetimeMinutes { get; set; } = 10;
+
+    public int CompletionLifetimeMinutes { get; set; } = 10;
+}
+
+public sealed class WeChatOpenPlatformOptions
+{
+    public const string SectionName = "WeChat:OpenPlatform";
+
+    public bool Enabled { get; set; }
+
+    public string AppId { get; set; } = string.Empty;
+
+    public string AppSecret { get; set; } = string.Empty;
+
+    public string CallbackUrl { get; set; } = string.Empty;
+}
+
+public sealed class WeChatOfficialAccountOptions
+{
+    public const string SectionName = "WeChat:OfficialAccount";
+
+    public bool Enabled { get; set; }
+
+    public string AppId { get; set; } = string.Empty;
+
+    public string AppSecret { get; set; } = string.Empty;
+
+    public string CallbackUrl { get; set; } = string.Empty;
+
+    public bool RequireUserInfoScope { get; set; } = true;
+}
+
 public static class AuthorizationPolicies
 {
     public const string AdminOnly = "AdminOnly";
