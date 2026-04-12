@@ -2,10 +2,9 @@ namespace ThreeBooks.BookBackend.LoginService.Contracts.Requests;
 
 public sealed record RegisterRequest(
     string Username,
-    string DisplayName,
+    string? DisplayName,
     string? Mobile,
-    string Password,
-    string ConfirmPassword);
+    string Password);
 
 public sealed record PasswordLoginRequest(
     string Identity,

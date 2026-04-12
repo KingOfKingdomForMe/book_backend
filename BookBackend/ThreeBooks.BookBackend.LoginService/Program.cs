@@ -22,17 +22,7 @@ app.UseAuthorization();
 
 await app.InitializeLoginServiceAsync();
 
-app.MapGet("/", () => Results.Ok(new
-{
-    service = "ThreeBooks.BookBackend.LoginService",
-    status = "running",
-    timestampUtc = DateTimeOffset.UtcNow
-})).AllowAnonymous();
-
-app.MapAuthEndpoints();
-app.MapWeChatEndpoints();
-app.MapUserEndpoints();
-app.MapRoleEndpoints();
+app.MapApiEndpoints();
 
 app.Run();
 

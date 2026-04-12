@@ -7,13 +7,13 @@
       "Enabled": true,
       "AppId": "your-open-platform-app-id",
       "AppSecret": "your-open-platform-app-secret",
-      "CallbackUrl": "https://your-public-domain/auth/wechat/qr/callback"
+      "CallbackUrl": "https://your-public-domain/api/auth/wechat/qr/callback"
     },
     "OfficialAccount": {
       "Enabled": true,
       "AppId": "your-official-account-app-id",
       "AppSecret": "your-official-account-app-secret",
-      "CallbackUrl": "https://your-public-domain/auth/wechat/official-account/callback",
+      "CallbackUrl": "https://your-public-domain/api/auth/wechat/official-account/callback",
       "RequireUserInfoScope": true
     }
   }

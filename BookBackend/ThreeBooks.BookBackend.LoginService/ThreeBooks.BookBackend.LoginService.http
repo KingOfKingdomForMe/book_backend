@@ -1,15 +1,16 @@
 @ThreeBooks.BookBackend.LoginService_HostAddress = http://localhost:5279
+@ThreeBooks.BookBackend.LoginService_ApiBase = {{ThreeBooks.BookBackend.LoginService_HostAddress}}/api
 @accessToken = replace-with-access-token
 @refreshToken = replace-with-refresh-token
 @externalSessionId = replace-with-session-id
 @completionToken = replace-with-completion-token
 
-GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/
+GET {{ThreeBooks.BookBackend.LoginService_ApiBase}}/
 Accept: application/json
 
 ###
 
-POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/register
+POST {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/register
 Content-Type: application/json
 
 {
@@ -22,7 +23,7 @@ Content-Type: application/json
 
 ###
 
-POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/login/password
+POST {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/login/password
 Content-Type: application/json
 
 {
@@ -32,7 +33,7 @@ Content-Type: application/json
 
 ###
 
-POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/refresh
+POST {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/refresh
 Content-Type: application/json
 
 {
@@ -41,13 +42,13 @@ Content-Type: application/json
 
 ###
 
-GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/users/me
+GET {{ThreeBooks.BookBackend.LoginService_ApiBase}}/users/me
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ###
 
-POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/qr/start
+POST {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/wechat/qr/start
 Content-Type: application/json
 
 {
@@ -56,12 +57,12 @@ Content-Type: application/json
 
 ###
 
-GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/sessions/{{externalSessionId}}?completionToken={{completionToken}}
+GET {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/wechat/sessions/{{externalSessionId}}?completionToken={{completionToken}}
 Accept: application/json
 
 ###
 
-POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/sessions/complete
+POST {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/wechat/sessions/complete
 Content-Type: application/json
 
 {
@@ -71,7 +72,7 @@ Content-Type: application/json
 
 ###
 
-POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/official-account/bind/start
+POST {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/wechat/official-account/bind/start
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
@@ -81,7 +82,7 @@ Content-Type: application/json
 
 ###
 
-POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/wechat/sessions/bind-current-user
+POST {{ThreeBooks.BookBackend.LoginService_ApiBase}}/auth/wechat/sessions/bind-current-user
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 

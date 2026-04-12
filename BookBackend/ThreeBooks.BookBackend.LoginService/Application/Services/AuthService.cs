@@ -41,7 +41,7 @@ public sealed class AuthService(
 
         var username = NormalizeUsername(request.Username);
         var mobile = NormalizeMobile(request.Mobile);
-        var displayName = request.DisplayName.Trim();
+        var displayName = request.DisplayName?.Trim();
 
         if (await _dbContext.Users.AnyAsync(user => user.Username == username, cancellationToken))
         {
@@ -546,16 +546,6 @@ public sealed class AuthService(
             errors[nameof(request.Username)] = ["Username is required."];
         }
 
-        if (string.IsNullOrWhiteSpace(request.DisplayName))
-        {
-            errors[nameof(request.DisplayName)] = ["Display name is required."];
-        }
-
-        if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
-        {
-            errors[nameof(request.ConfirmPassword)] = ["Confirm password does not match password."];
-        }
-
         AppendPasswordPolicyErrors(request.Password, nameof(request.Password), errors);
 
         if (errors.Count > 0)
@@ -614,25 +604,25 @@ public sealed class AuthService(
             ruleFailures.Add($"Password must be at least {_passwordPolicyOptions.MinLength} characters long.");
         }
 
-        if (_passwordPolicyOptions.RequireUppercase && !password.Any(char.IsUpper))
-        {
-            ruleFailures.Add("Password must contain at least one uppercase letter.");
-        }
+        //if (_passwordPolicyOptions.RequireUppercase && !password.Any(char.IsUpper))
+        //{
+        //    ruleFailures.Add("Password must contain at least one uppercase letter.");
+        //}
 
-        if (_passwordPolicyOptions.RequireLowercase && !password.Any(char.IsLower))
-        {
-            ruleFailures.Add("Password must contain at least one lowercase letter.");
-        }
+        //if (_passwordPolicyOptions.RequireLowercase && !password.Any(char.IsLower))
+        //{
+        //    ruleFailures.Add("Password must contain at least one lowercase letter.");
+        //}
 
-        if (_passwordPolicyOptions.RequireDigit && !password.Any(char.IsDigit))
-        {
-            ruleFailures.Add("Password must contain at least one digit.");
-        }
+        //if (_passwordPolicyOptions.RequireDigit && !password.Any(char.IsDigit))
+        //{
+        //    ruleFailures.Add("Password must contain at least one digit.");
+        //}
 
-        if (_passwordPolicyOptions.RequireNonAlphanumeric && password.All(char.IsLetterOrDigit))
-        {
-            ruleFailures.Add("Password must contain at least one non-alphanumeric character.");
-        }
+        //if (_passwordPolicyOptions.RequireNonAlphanumeric && password.All(char.IsLetterOrDigit))
+        //{
+        //    ruleFailures.Add("Password must contain at least one non-alphanumeric character.");
+        //}
 
         if (ruleFailures.Count > 0)
         {
