@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddLoginService(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddControllers();
         services.AddProblemDetails();
         services.AddExceptionHandler<ApiExceptionHandler>();
 
@@ -92,7 +93,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<LoginDbSeeder>();
         services.AddHttpClient<IWeChatAuthClient, WeChatAuthClient>();
 
-        services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(options =>
         {
             options.SwaggerDoc("v1", new OpenApiInfo

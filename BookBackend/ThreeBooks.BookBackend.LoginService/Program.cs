@@ -1,4 +1,3 @@
-using ThreeBooks.BookBackend.LoginService.Api.Endpoints;
 using ThreeBooks.BookBackend.LoginService.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,7 +21,7 @@ app.UseAuthorization();
 
 await app.InitializeLoginServiceAsync();
 
-app.MapApiEndpoints();
+app.MapControllers();
 
 app.Run();
 
