@@ -1,0 +1,46 @@
+@ThreeBooks.BookBackend.LoginService_HostAddress = http://localhost:5279
+@accessToken = replace-with-access-token
+@refreshToken = replace-with-refresh-token
+
+GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/
+Accept: application/json
+
+###
+
+POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/register
+Content-Type: application/json
+
+{
+	"username": "admin",
+	"displayName": "System Administrator",
+	"mobile": "13800138000",
+	"password": "Admin1234",
+	"confirmPassword": "Admin1234"
+}
+
+###
+
+POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/login/password
+Content-Type: application/json
+
+{
+	"identity": "admin",
+	"password": "Admin1234"
+}
+
+###
+
+POST {{ThreeBooks.BookBackend.LoginService_HostAddress}}/auth/refresh
+Content-Type: application/json
+
+{
+	"refreshToken": "{{refreshToken}}"
+}
+
+###
+
+GET {{ThreeBooks.BookBackend.LoginService_HostAddress}}/users/me
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+###

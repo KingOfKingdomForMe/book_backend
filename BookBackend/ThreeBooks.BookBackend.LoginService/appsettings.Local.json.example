@@ -1,0 +1,5 @@
+{
+  "ConnectionStrings": {
+    "LoginDb": "Server=localhost;Port=3306;Database=threebooks_login_dev;User=your_user;Password=your_password;CharSet=utf8mb4;AllowUserVariables=True"
+  }
+}
