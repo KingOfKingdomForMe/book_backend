@@ -34,15 +34,15 @@
   </ItemGroup>
 
   <Target Name="StopLocalWindowsServiceBeforePublish"
-          BeforeTargets="CopyFilesToPublishDirectory"
-          Condition="'$(PublishProfileName)' == 'LocalWindowsService' and '$(SkipLocalWindowsServiceAutomation)' != 'true'">
+      BeforeTargets="_IncrementalCleanPublishDirectory;_CopyResolvedFilesToPublishPreserveNewest;_CopyResolvedFilesToPublishAlways"
+      Condition="'$(EnableLocalWindowsServiceAutomation)' == 'true' and '$(SkipLocalWindowsServiceAutomation)' != 'true'">
     <Message Text="Stopping local Windows service '$(LocalWindowsServiceName)' before publish." Importance="high" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(LocalWindowsServiceSourceScript)&quot; -Action Stop -ServiceName &quot;$(LocalWindowsServiceName)&quot;" />
   </Target>
 
   <Target Name="DeployLocalWindowsServiceAfterPublish"
           AfterTargets="Publish"
-          Condition="'$(PublishProfileName)' == 'LocalWindowsService' and '$(SkipLocalWindowsServiceAutomation)' != 'true'">
+      Condition="'$(EnableLocalWindowsServiceAutomation)' == 'true' and '$(SkipLocalWindowsServiceAutomation)' != 'true'">
     <Message Text="Deploying local Windows service '$(LocalWindowsServiceName)' after publish." Importance="high" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(PublishDir)scripts\Deploy-LocalWindowsService.ps1&quot; -Action Deploy -ServiceName &quot;$(LocalWindowsServiceName)&quot; -DisplayName &quot;$(LocalWindowsServiceDisplayName)&quot;" />
   </Target>
