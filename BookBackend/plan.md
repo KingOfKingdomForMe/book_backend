@@ -59,3 +59,19 @@
 1. 用户唯一标识建议优先明确：是用户名、手机号、邮箱三选一，还是支持多种登录名并存；推荐首版至少支持 username + mobile 两类唯一键设计。
 2. 如果未来会做单点登录或多系统统一鉴权，建议尽早把 Role 之外的 Permission / Scope 模型纳入设计，否则后续迁移成本会上升。
 3. 如果后续微信/短信接入节奏较快，建议二期引入 Redis，用于验证码、扫码状态、风控计数和短时 token 缓存。
+
+## Plan: Login Service Windows Service Hosting
+
+为 ThreeBooks.BookBackend.LoginService 增加原生 Windows Service 托管支持，并在服务模式下通过显式配置启用 Swagger，使发布后的服务可以直接通过浏览器访问 Swagger UI。发布流程采用独立的本地文件系统 publish profile，再用 PowerShell 脚本注册或更新系统服务，避免依赖额外的服务包装器。
+
+**Steps**
+1. 在 Program.cs 中启用 `UseWindowsService()`，并额外加载 `appsettings.Service.json` 作为服务环境专用配置。
+2. 将 Swagger 启用条件从 `IsDevelopment()` 扩展为 `Development` 或 `Swagger:Enabled=true`。
+3. 新增 `appsettings.Service.json`，为服务模式提供固定监听地址和 Swagger 开关。
+4. 新增 `LocalWindowsService.pubxml`，统一将发布产物输出到 solution 根目录下的 `publish/ThreeBooks.BookBackend.LoginService/local-service/`。
+5. 新增 `scripts/Deploy-LocalWindowsService.ps1`，通过原生 Windows Service 注册方式安装、启动、停止、重建服务。
+
+**Verification**
+1. 发布到 `publish/ThreeBooks.BookBackend.LoginService/local-service/` 后，目录中应包含 exe、runtimeconfig、`appsettings.Service.json` 与部署脚本。
+2. 以管理员身份运行部署脚本执行安装后，Windows 服务列表中应出现 `ThreeBooks.BookBackend.LoginService`。
+3. 启动服务后，访问 `http://localhost:5279/swagger` 应能打开 Swagger UI。

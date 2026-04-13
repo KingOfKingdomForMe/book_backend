@@ -2,7 +2,14 @@ using ThreeBooks.BookBackend.LoginService.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+builder.Host.UseWindowsService(options =>
+{
+    options.ServiceName = "ThreeBooks.BookBackend.LoginService";
+});
+
+builder.Configuration
+    .AddJsonFile("appsettings.Service.json", optional: true, reloadOnChange: true)
+    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
 builder.Services.AddLoginService(builder.Configuration);
 
@@ -10,7 +17,9 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
+var swaggerEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled");
+
+if (swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
