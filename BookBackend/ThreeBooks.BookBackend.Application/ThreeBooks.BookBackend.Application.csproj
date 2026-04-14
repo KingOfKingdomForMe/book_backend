@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThreeBooks.BookBackend.Domain\ThreeBooks.BookBackend.Domain.csproj" />
+    <ProjectReference Include="..\ThreeBooks.BookBackend.Contracts\ThreeBooks.BookBackend.Contracts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

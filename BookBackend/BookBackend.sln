@@ -7,6 +7,16 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BookBackend", "BookBackend\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.LoginService", "ThreeBooks.BookBackend.LoginService\ThreeBooks.BookBackend.LoginService.csproj", "{085424A3-43C4-48B7-985B-55E9F0B3A492}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Api", "ThreeBooks.BookBackend.Api\ThreeBooks.BookBackend.Api.csproj", "{DAAAD2E1-116C-4F96-81A8-ED3334401AB9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Application", "ThreeBooks.BookBackend.Application\ThreeBooks.BookBackend.Application.csproj", "{C2A24F40-6AB9-4A5A-8C53-AC5BCBBE5CC6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Infrastructure", "ThreeBooks.BookBackend.Infrastructure\ThreeBooks.BookBackend.Infrastructure.csproj", "{A9821849-67DD-4BB5-9851-48B6FB05F7F0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Domain", "ThreeBooks.BookBackend.Domain\ThreeBooks.BookBackend.Domain.csproj", "{67E47D21-C72C-452E-90D6-BCC68793C831}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Contracts", "ThreeBooks.BookBackend.Contracts\ThreeBooks.BookBackend.Contracts.csproj", "{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +31,26 @@ Global
 		{085424A3-43C4-48B7-985B-55E9F0B3A492}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{085424A3-43C4-48B7-985B-55E9F0B3A492}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{085424A3-43C4-48B7-985B-55E9F0B3A492}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DAAAD2E1-116C-4F96-81A8-ED3334401AB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DAAAD2E1-116C-4F96-81A8-ED3334401AB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DAAAD2E1-116C-4F96-81A8-ED3334401AB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DAAAD2E1-116C-4F96-81A8-ED3334401AB9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C2A24F40-6AB9-4A5A-8C53-AC5BCBBE5CC6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2A24F40-6AB9-4A5A-8C53-AC5BCBBE5CC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2A24F40-6AB9-4A5A-8C53-AC5BCBBE5CC6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2A24F40-6AB9-4A5A-8C53-AC5BCBBE5CC6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A9821849-67DD-4BB5-9851-48B6FB05F7F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9821849-67DD-4BB5-9851-48B6FB05F7F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9821849-67DD-4BB5-9851-48B6FB05F7F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9821849-67DD-4BB5-9851-48B6FB05F7F0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{67E47D21-C72C-452E-90D6-BCC68793C831}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67E47D21-C72C-452E-90D6-BCC68793C831}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67E47D21-C72C-452E-90D6-BCC68793C831}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67E47D21-C72C-452E-90D6-BCC68793C831}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
