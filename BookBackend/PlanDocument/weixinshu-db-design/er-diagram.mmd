@@ -1,0 +1,403 @@
+%% ============================================================
+%% 心书 (weixinshu.com) 全域 ER 图 — 基于公开网页推断
+%% ============================================================
+
+erDiagram
+
+    %% ========== 身份域 ==========
+    identity_user {
+        bigint id PK
+        varchar user_no UK
+        varchar phone UK
+        varchar password_hash
+        tinyint status
+        datetime registered_at
+    }
+    identity_user_profile {
+        bigint id PK
+        bigint user_id FK
+        varchar nickname
+        varchar avatar_url
+    }
+    identity_external_identity {
+        bigint id PK
+        bigint user_id FK
+        varchar platform
+        varchar external_uid
+        tinyint auth_status
+    }
+    identity_auth_session {
+        bigint id PK
+        varchar session_key UK
+        varchar platform
+        tinyint status
+        bigint user_id FK
+    }
+    identity_login_token {
+        bigint id PK
+        bigint user_id FK
+        varchar token_hash UK
+        datetime expires_at
+    }
+
+    identity_user ||--o| identity_user_profile : "has profile"
+    identity_user ||--o{ identity_external_identity : "binds"
+    identity_user ||--o{ identity_login_token : "holds tokens"
+    identity_auth_session }o--o| identity_user : "resolves to"
+
+    %% ========== 内容导入域 ==========
+    content_source_account {
+        bigint id PK
+        bigint user_id FK
+        varchar platform
+        bigint external_identity_id FK
+    }
+    content_import_job {
+        bigint id PK
+        bigint user_id FK
+        bigint source_account_id FK
+        tinyint status
+    }
+    content_post {
+        bigint id PK
+        bigint user_id FK
+        bigint import_job_id FK
+        varchar source_platform
+        text content_text
+        datetime posted_at
+    }
+    content_post_media {
+        bigint id PK
+        bigint post_id FK
+        varchar media_type
+        varchar storage_url
+    }
+    content_post_tag {
+        bigint id PK
+        bigint post_id FK
+        varchar tag_name
+    }
+    content_user_upload {
+        bigint id PK
+        bigint user_id FK
+        varchar media_type
+        varchar storage_url
+    }
+
+    identity_user ||--o{ content_source_account : "owns"
+    content_source_account ||--o{ content_import_job : "triggers"
+    identity_user ||--o{ content_import_job : "runs"
+    content_import_job ||--o{ content_post : "produces"
+    identity_user ||--o{ content_post : "owns"
+    content_post ||--o{ content_post_media : "contains"
+    content_post ||--o{ content_post_tag : "tagged"
+    identity_user ||--o{ content_user_upload : "uploads"
+
+    %% ========== 作品域 ==========
+    book_project {
+        bigint id PK
+        bigint user_id FK
+        varchar book_type
+        varchar title
+        tinyint status
+        int page_count
+    }
+    book_project_entry {
+        bigint id PK
+        bigint project_id FK
+        bigint content_post_id FK
+        varchar entry_type
+        int sort_order
+    }
+    book_project_asset {
+        bigint id PK
+        bigint project_id FK
+        bigint entry_id FK
+    }
+    book_project_cover {
+        bigint id PK
+        bigint project_id FK
+        varchar cover_source
+        bigint template_id FK
+    }
+    book_project_preface {
+        bigint id PK
+        bigint project_id FK
+        varchar section_type
+    }
+    book_project_layout {
+        bigint id PK
+        bigint project_id FK
+        varchar size_code
+        varchar layout_code
+        varchar binding_code
+    }
+    book_project_version {
+        bigint id PK
+        bigint project_id FK
+        int version_no
+        json snapshot_data
+        int page_count
+    }
+
+    identity_user ||--o{ book_project : "creates"
+    book_project ||--o{ book_project_entry : "contains"
+    content_post ||--o{ book_project_entry : "referenced by"
+    book_project ||--o{ book_project_asset : "has assets"
+    book_project ||--o| book_project_cover : "has cover"
+    book_project ||--o{ book_project_preface : "has preface"
+    book_project ||--o| book_project_layout : "has layout"
+    book_project ||--o{ book_project_version : "versioned"
+
+    %% ========== 商品目录域 ==========
+    catalog_category {
+        bigint id PK
+        varchar name
+        varchar slug UK
+    }
+    catalog_product_spu {
+        bigint id PK
+        bigint category_id FK
+        varchar spu_code UK
+        varchar name
+    }
+    catalog_product_sku {
+        bigint id PK
+        bigint spu_id FK
+        varchar sku_code UK
+        int min_pages
+    }
+    catalog_spec_definition {
+        bigint id PK
+        varchar spec_key UK
+    }
+    catalog_spec_value {
+        bigint id PK
+        bigint spec_id FK
+        varchar value_code
+    }
+    catalog_price_rule {
+        bigint id PK
+        bigint sku_id FK
+        decimal base_price
+        decimal page_unit_price
+    }
+    catalog_layout_template {
+        bigint id PK
+        varchar layout_code UK
+    }
+    catalog_cover_template {
+        bigint id PK
+        varchar template_code UK
+    }
+    catalog_bundle {
+        bigint id PK
+        varchar bundle_code UK
+        decimal bundle_price
+    }
+    catalog_bundle_item {
+        bigint id PK
+        bigint bundle_id FK
+        bigint sku_id FK
+        int quantity
+    }
+
+    catalog_category ||--o{ catalog_product_spu : "groups"
+    catalog_product_spu ||--o{ catalog_product_sku : "variants"
+    catalog_spec_definition ||--o{ catalog_spec_value : "defines"
+    catalog_product_sku ||--o{ catalog_price_rule : "priced by"
+    catalog_bundle ||--o{ catalog_bundle_item : "includes"
+    catalog_bundle_item }o--|| catalog_product_sku : "refers"
+
+    book_project_cover }o--o| catalog_cover_template : "uses"
+    book_project_layout }o--o| catalog_layout_template : "uses"
+    book_project }o--o| catalog_product_spu : "typed as"
+
+    %% ========== 交易履约域 ==========
+    order_shipping_address {
+        bigint id PK
+        bigint user_id FK
+        varchar receiver_name
+        varchar phone
+    }
+    order_order {
+        bigint id PK
+        varchar order_no UK
+        bigint user_id FK
+        tinyint status
+        decimal pay_amount
+        bigint agent_account_id FK
+        bigint bundle_id FK
+    }
+    order_order_item {
+        bigint id PK
+        bigint order_id FK
+        bigint project_id FK
+        bigint project_version_id FK
+        bigint sku_id FK
+        bigint price_snapshot_id FK
+    }
+    order_price_snapshot {
+        bigint id PK
+        bigint order_item_id FK
+        varchar spu_code
+        varchar sku_code
+        int page_count
+        decimal final_price
+    }
+    order_payment {
+        bigint id PK
+        varchar payment_no UK
+        bigint order_id FK
+        varchar pay_channel
+        tinyint status
+    }
+    order_payment_txn {
+        bigint id PK
+        bigint payment_id FK
+        varchar txn_type
+        varchar idempotency_key UK
+    }
+    order_shipment {
+        bigint id PK
+        bigint order_id FK
+        varchar shipment_no UK
+        tinyint status
+    }
+    order_shipment_event {
+        bigint id PK
+        bigint shipment_id FK
+        datetime event_time
+        varchar event_desc
+    }
+
+    identity_user ||--o{ order_shipping_address : "saves"
+    identity_user ||--o{ order_order : "places"
+    order_order ||--o{ order_order_item : "contains"
+    order_order_item ||--|| order_price_snapshot : "snapshot"
+    order_order_item }o--o| book_project : "for project"
+    order_order_item }o--o| book_project_version : "frozen version"
+    order_order ||--o{ order_payment : "paid via"
+    order_payment ||--o{ order_payment_txn : "transactions"
+    order_order ||--o{ order_shipment : "shipped via"
+    order_shipment ||--o{ order_shipment_event : "tracked"
+    order_order }o--o| catalog_bundle : "bundle order"
+
+    %% ========== 社区晒单域 ==========
+    community_unboxing_level {
+        bigint id PK
+        varchar level_code UK
+        varchar level_name
+    }
+    community_unboxing_post {
+        bigint id PK
+        varchar post_no UK
+        bigint user_id FK
+        bigint order_item_id FK
+        bigint project_version_id FK
+        bigint level_id FK
+        tinyint status
+    }
+    community_unboxing_media {
+        bigint id PK
+        bigint post_id FK
+    }
+    community_unboxing_tag {
+        bigint id PK
+        bigint post_id FK
+        varchar tag_name
+    }
+
+    identity_user ||--o{ community_unboxing_post : "posts"
+    community_unboxing_post }o--o| order_order_item : "about"
+    community_unboxing_post }o--o| book_project_version : "showcases"
+    community_unboxing_post }o--o| community_unboxing_level : "rated"
+    community_unboxing_post ||--o{ community_unboxing_media : "media"
+    community_unboxing_post ||--o{ community_unboxing_tag : "tagged"
+
+    %% ========== 代理分销域 ==========
+    agent_application {
+        bigint id PK
+        bigint user_id FK
+        tinyint status
+    }
+    agent_account {
+        bigint id PK
+        bigint user_id FK
+        bigint application_id FK
+        varchar agent_code UK
+        decimal balance
+    }
+    agent_brand {
+        bigint id PK
+        bigint agent_id FK
+        varchar brand_name
+    }
+    agent_share_link {
+        bigint id PK
+        bigint agent_id FK
+        varchar link_code UK
+    }
+    agent_pricing_rule {
+        bigint id PK
+        bigint agent_id FK
+        bigint sku_id FK
+        decimal markup_value
+    }
+    agent_customer_attribution {
+        bigint id PK
+        bigint user_id FK
+        bigint agent_id FK
+        bigint share_link_id FK
+    }
+    agent_commission_ledger {
+        bigint id PK
+        bigint agent_id FK
+        bigint order_id FK
+        varchar txn_type
+        decimal amount
+    }
+    agent_withdraw_request {
+        bigint id PK
+        bigint agent_id FK
+        varchar request_no UK
+        tinyint status
+    }
+
+    identity_user ||--o| agent_application : "applies"
+    agent_application ||--o| agent_account : "approved as"
+    agent_account ||--o| agent_brand : "brands"
+    agent_account ||--o{ agent_share_link : "creates links"
+    agent_account ||--o{ agent_pricing_rule : "sets prices"
+    agent_account ||--o{ agent_commission_ledger : "earns"
+    agent_account ||--o{ agent_withdraw_request : "withdraws"
+    agent_share_link ||--o{ agent_customer_attribution : "attributes"
+    identity_user ||--o{ agent_customer_attribution : "attributed to"
+    order_order }o--o| agent_account : "via agent"
+
+    %% ========== 合规审计域 ==========
+    sys_privacy_policy_version {
+        bigint id PK
+        varchar version_code UK
+    }
+    sys_consent_log {
+        bigint id PK
+        bigint user_id FK
+        varchar consent_type
+        varchar action
+    }
+    sys_audit_log {
+        bigint id PK
+        varchar actor_type
+        varchar action
+    }
+    sys_third_party_share_log {
+        bigint id PK
+        bigint user_id FK
+        bigint order_id FK
+        varchar third_party
+    }
+
+    identity_user ||--o{ sys_consent_log : "consents"
+    sys_consent_log }o--o| sys_privacy_policy_version : "version"
+    identity_user ||--o{ sys_third_party_share_log : "shared data"
