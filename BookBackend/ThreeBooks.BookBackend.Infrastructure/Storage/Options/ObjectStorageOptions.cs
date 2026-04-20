@@ -4,9 +4,9 @@ public sealed class ObjectStorageOptions
 {
     public string? ServiceUrl { get; set; }
 
-    public string? AccessKey { get; set; }
+    public string? AccessKey { get; set; } = "admin";
 
-    public string? SecretKey { get; set; }
+    public string? SecretKey { get; set; } = "admin";
 
     public string? DefaultBucket { get; set; }
 

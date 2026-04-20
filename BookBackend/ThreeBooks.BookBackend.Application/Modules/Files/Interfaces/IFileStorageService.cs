@@ -1,4 +1,5 @@
 using ThreeBooks.BookBackend.Application.Common;
+using ThreeBooks.BookBackend.Application.Modules.Files.Models;
 using ThreeBooks.BookBackend.Contracts.Files.Requests;
 using ThreeBooks.BookBackend.Contracts.Files.Responses;
 
@@ -17,6 +18,12 @@ public interface IFileStorageService
 
     Task<FileAccessUrlResponse?> GetAccessUrlAsync(
         GetFileAccessUrlRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<StoredFileContent?> DownloadAsync(
+        string? bucket,
+        string objectKey,
         RequestContext context,
         CancellationToken cancellationToken);
 

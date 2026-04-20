@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using ThreeBooks.BookBackend.Application.Modules.Files.Interfaces;
 using ThreeBooks.BookBackend.Contracts.Files.Requests;
 using ThreeBooks.BookBackend.Contracts.Files.Responses;
@@ -14,10 +15,11 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<UploadFileResponse>> UploadAsync(
-        [FromForm] UploadFileRequest request,
-        [FromForm] IFormFile? file,
+        [FromForm] UploadFileForm form,
         CancellationToken cancellationToken)
     {
+        var file = form.File;
+
         if (file is null)
         {
             return BadRequest("Form field 'file' is required.");
@@ -33,7 +35,7 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
             await using var stream = file.OpenReadStream();
 
             var response = await fileStorageService.UploadAsync(
-                request,
+                new UploadFileRequest(form.Bucket, form.Directory, form.ObjectKey, form.FileName),
                 stream,
                 file.FileName,
                 file.ContentType,
@@ -49,7 +51,7 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
             return Ok(response with
             {
                 ProxyUrl = BuildProxyUrl(response.Bucket, response.ObjectKey),
-                AccessUrl = accessUrl?.Url
+                AccessUrl = accessUrl is null ? null : BuildAbsoluteProxyUrl(response.Bucket, response.ObjectKey)
             });
         }
         catch (ArgumentException exception)
@@ -82,7 +84,10 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
                 return NotFound();
             }
 
-            return Ok(response);
+            return Ok(response with
+            {
+                Url = BuildAbsoluteProxyUrl(response.Bucket, response.ObjectKey)
+            });
         }
         catch (ArgumentException exception)
         {
@@ -98,28 +103,41 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
     }
 
     [HttpGet("content/{bucket}/{**objectKey}")]
-    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> RedirectToContentAsync(
         string bucket,
         string objectKey,
-        [FromQuery] int expiresInMinutes = 10,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await fileStorageService.GetAccessUrlAsync(
-                new GetFileAccessUrlRequest(bucket, objectKey, expiresInMinutes),
-                BuildRequestContext(),
-                cancellationToken);
+            var response = await fileStorageService.DownloadAsync(bucket, objectKey, BuildRequestContext(), cancellationToken);
 
             if (response is null)
             {
                 return NotFound();
             }
 
-            return Redirect(response.Url);
+            if (response.Lease is not null)
+            {
+                HttpContext.Response.RegisterForDispose(response.Lease);
+            }
+
+            if (response.ContentLength.HasValue)
+            {
+                HttpContext.Response.ContentLength = response.ContentLength.Value;
+            }
+
+            HttpContext.Response.Headers.ContentDisposition = BuildContentDisposition(
+                response.FileName,
+                IsInlinePreviewable(response.ContentType));
+
+            return File(
+                response.Content,
+                response.ContentType ?? "application/octet-stream",
+                enableRangeProcessing: true);
         }
         catch (ArgumentException exception)
         {
@@ -170,6 +188,33 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
     private string BuildProxyUrl(string bucket, string objectKey)
     {
         return $"/api/files/content/{Uri.EscapeDataString(bucket)}/{EncodeObjectKeyForPath(objectKey)}";
+    }
+
+    private string BuildAbsoluteProxyUrl(string bucket, string objectKey)
+    {
+        return $"{Request.Scheme}://{Request.Host}{Request.PathBase}{BuildProxyUrl(bucket, objectKey)}";
+    }
+
+    private static string BuildContentDisposition(string fileName, bool inline)
+    {
+        var disposition = new ContentDispositionHeaderValue(inline ? "inline" : "attachment")
+        {
+            FileNameStar = fileName,
+            FileName = fileName
+        };
+
+        return disposition.ToString();
+    }
+
+    private static bool IsInlinePreviewable(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return false;
+        }
+
+        return contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string EncodeObjectKeyForPath(string objectKey)

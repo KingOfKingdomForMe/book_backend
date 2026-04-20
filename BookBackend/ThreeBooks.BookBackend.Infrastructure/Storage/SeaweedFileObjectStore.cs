@@ -76,6 +76,48 @@ public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFile
         return new Uri(client.GetPreSignedURL(request));
     }
 
+    public async Task<StoredFileContent?> DownloadAsync(
+        string bucket,
+        string objectKey,
+        CancellationToken cancellationToken)
+    {
+        var client = CreateClient();
+
+        try
+        {
+            var response = await client.GetObjectAsync(new GetObjectRequest
+            {
+                BucketName = bucket,
+                Key = objectKey
+            }, cancellationToken);
+
+            var fileName = Path.GetFileName(objectKey);
+
+            return new StoredFileContent(
+                response.ResponseStream,
+                string.IsNullOrWhiteSpace(response.Headers.ContentType)
+                    ? "application/octet-stream"
+                    : response.Headers.ContentType,
+                response.Headers.ContentLength,
+                string.IsNullOrWhiteSpace(fileName) ? objectKey : fileName,
+                new CompositeDisposable(response, client));
+        }
+        catch (AmazonS3Exception exception) when (
+            exception.StatusCode == System.Net.HttpStatusCode.NotFound
+            || string.Equals(exception.ErrorCode, "NoSuchKey", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(exception.ErrorCode, "NotFound", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(exception.ErrorCode, "NoSuchBucket", StringComparison.OrdinalIgnoreCase))
+        {
+            client.Dispose();
+            return null;
+        }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
+    }
+
     public async Task<bool> DeleteAsync(
         string bucket,
         string objectKey,
@@ -178,5 +220,26 @@ public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFile
         return endpointUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
             ? Protocol.HTTPS
             : Protocol.HTTP;
+    }
+
+    private sealed class CompositeDisposable(params IDisposable[] disposables) : IDisposable
+    {
+        private readonly IDisposable[] _disposables = disposables;
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            foreach (var disposable in _disposables)
+            {
+                disposable.Dispose();
+            }
+        }
     }
 }

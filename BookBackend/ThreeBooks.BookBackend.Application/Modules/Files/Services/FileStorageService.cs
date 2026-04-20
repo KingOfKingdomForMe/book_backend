@@ -6,7 +6,9 @@ using ThreeBooks.BookBackend.Contracts.Files.Responses;
 
 namespace ThreeBooks.BookBackend.Application.Modules.Files.Services;
 
-public sealed class FileStorageService(IFileObjectStore objectStore) : IFileStorageService
+public sealed class FileStorageService(
+    IFileObjectStore objectStore,
+    IFileMetadataStore metadataStore) : IFileStorageService
 {
     private const int DefaultPresignedUrlExpiresInMinutes = 60;
     private const int MinPresignedUrlExpiresInMinutes = 1;
@@ -43,6 +45,16 @@ public sealed class FileStorageService(IFileObjectStore objectStore) : IFileStor
                 content),
             cancellationToken);
 
+        try
+        {
+            await metadataStore.SaveUploadAsync(stored, originalFileName, context, cancellationToken);
+        }
+        catch
+        {
+            await objectStore.DeleteAsync(stored.Bucket, stored.ObjectKey, cancellationToken);
+            throw;
+        }
+
         return new UploadFileResponse(
             stored.Bucket,
             stored.ObjectKey,
@@ -69,6 +81,8 @@ public sealed class FileStorageService(IFileObjectStore objectStore) : IFileStor
             return null;
         }
 
+        await metadataStore.RecordAccessAsync(bucket, objectKey, expiresAtUtc, context, cancellationToken);
+
         return new FileAccessUrlResponse(
             bucket,
             objectKey,
@@ -76,16 +90,31 @@ public sealed class FileStorageService(IFileObjectStore objectStore) : IFileStor
             expiresAtUtc);
     }
 
-    public Task<bool> DeleteAsync(
+    public Task<StoredFileContent?> DownloadAsync(
         string? bucket,
         string objectKey,
         RequestContext context,
         CancellationToken cancellationToken)
     {
-        return objectStore.DeleteAsync(
-            NormalizeBucket(bucket, objectStore.DefaultBucket),
-            NormalizeObjectKey(objectKey),
-            cancellationToken);
+        return DownloadCoreAsync(bucket, objectKey, cancellationToken);
+    }
+
+    public async Task<bool> DeleteAsync(
+        string? bucket,
+        string objectKey,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        var normalizedBucket = NormalizeBucket(bucket, objectStore.DefaultBucket);
+        var normalizedObjectKey = NormalizeObjectKey(objectKey);
+        var deleted = await objectStore.DeleteAsync(normalizedBucket, normalizedObjectKey, cancellationToken);
+
+        if (deleted)
+        {
+            await metadataStore.MarkDeletedAsync(normalizedBucket, normalizedObjectKey, context, cancellationToken);
+        }
+
+        return deleted;
     }
 
     private static int NormalizeExpiresInMinutes(int expiresInMinutes)
@@ -166,5 +195,105 @@ public sealed class FileStorageService(IFileObjectStore objectStore) : IFileStor
         }
 
         return string.Join('/', segments);
+    }
+
+    private async Task<StoredFileContent?> DownloadCoreAsync(
+        string? bucket,
+        string objectKey,
+        CancellationToken cancellationToken)
+    {
+        var normalizedBucket = NormalizeBucket(bucket, objectStore.DefaultBucket);
+        var normalizedObjectKey = NormalizeObjectKey(objectKey);
+        var content = await objectStore.DownloadAsync(normalizedBucket, normalizedObjectKey, cancellationToken);
+
+        if (content is null)
+        {
+            return null;
+        }
+
+        var metadata = await metadataStore.GetAsync(normalizedBucket, normalizedObjectKey, cancellationToken);
+        var resolvedContentType = NormalizeResolvedContentType(metadata?.ContentType, content.ContentType);
+        var resolvedFileName = ResolveDownloadFileName(metadata, normalizedObjectKey, resolvedContentType);
+
+        return content with
+        {
+            ContentType = resolvedContentType,
+            FileName = resolvedFileName,
+            ContentLength = metadata?.ContentLength > 0 ? metadata.ContentLength : content.ContentLength
+        };
+    }
+
+    private static string NormalizeResolvedContentType(string? preferredContentType, string? fallbackContentType)
+    {
+        var preferred = preferredContentType?.Trim();
+        if (!string.IsNullOrWhiteSpace(preferred))
+        {
+            return preferred;
+        }
+
+        var fallback = fallbackContentType?.Trim();
+        return string.IsNullOrWhiteSpace(fallback) ? "application/octet-stream" : fallback;
+    }
+
+    private static string ResolveDownloadFileName(
+        StoredFileMetadata? metadata,
+        string objectKey,
+        string contentType)
+    {
+        var preferredName = metadata?.OriginalFileName;
+        if (string.IsNullOrWhiteSpace(preferredName))
+        {
+            preferredName = metadata?.FileName;
+        }
+
+        if (string.IsNullOrWhiteSpace(preferredName))
+        {
+            preferredName = Path.GetFileName(objectKey);
+        }
+
+        var safeFileName = Path.GetFileName(preferredName);
+        if (string.IsNullOrWhiteSpace(safeFileName))
+        {
+            safeFileName = Path.GetFileName(objectKey);
+        }
+
+        if (!string.IsNullOrWhiteSpace(Path.GetExtension(safeFileName)))
+        {
+            return safeFileName;
+        }
+
+        var extension = ResolveFileExtension(metadata, objectKey, contentType);
+        return string.IsNullOrWhiteSpace(extension)
+            ? safeFileName
+            : $"{safeFileName}{extension}";
+    }
+
+    private static string? ResolveFileExtension(
+        StoredFileMetadata? metadata,
+        string objectKey,
+        string contentType)
+    {
+        var metadataExtension = metadata?.FileExtension?.Trim().TrimStart('.');
+        if (!string.IsNullOrWhiteSpace(metadataExtension))
+        {
+            return $".{metadataExtension.ToLowerInvariant()}";
+        }
+
+        var objectKeyExtension = Path.GetExtension(objectKey);
+        if (!string.IsNullOrWhiteSpace(objectKeyExtension))
+        {
+            return objectKeyExtension;
+        }
+
+        return contentType.ToLowerInvariant() switch
+        {
+            "application/pdf" => ".pdf",
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            "text/plain" => ".txt",
+            _ => null
+        };
     }
 }

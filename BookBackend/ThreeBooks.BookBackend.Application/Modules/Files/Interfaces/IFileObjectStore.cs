@@ -16,6 +16,11 @@ public interface IFileObjectStore
         TimeSpan expiresIn,
         CancellationToken cancellationToken);
 
+    Task<StoredFileContent?> DownloadAsync(
+        string bucket,
+        string objectKey,
+        CancellationToken cancellationToken);
+
     Task<bool> DeleteAsync(
         string bucket,
         string objectKey,
