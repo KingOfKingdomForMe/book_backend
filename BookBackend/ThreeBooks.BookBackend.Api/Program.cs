@@ -3,17 +3,23 @@ using Microsoft.Extensions.Hosting.WindowsServices;
 using ThreeBooks.BookBackend.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
+var isWindowsService = WindowsServiceHelpers.IsWindowsService();
 
 builder.Host.UseWindowsService(options =>
 {
     options.ServiceName = "ThreeBooks.BookBackend.Api";
 });
 
-builder.Configuration
-    .AddJsonFile("appsettings.Service.json", optional: true, reloadOnChange: true)
-    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+if (isWindowsService)
+{
+    builder.Configuration.AddJsonFile("appsettings.Service.json", optional: true, reloadOnChange: true);
+}
 
-if (builder.Environment.IsDevelopment() && !WindowsServiceHelpers.IsWindowsService())
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
+if (builder.Environment.IsDevelopment()
+    && !isWindowsService
+    && !HasExplicitDebugUrls(builder.Configuration))
 {
     builder.WebHost.UseUrls("http://localhost:5281");
 }
@@ -35,5 +41,13 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static bool HasExplicitDebugUrls(IConfiguration configuration)
+{
+    return !string.IsNullOrWhiteSpace(configuration["ASPNETCORE_URLS"])
+        || !string.IsNullOrWhiteSpace(configuration["DOTNET_URLS"])
+        || !string.IsNullOrWhiteSpace(configuration["URLS"])
+        || !string.IsNullOrWhiteSpace(configuration["Urls"]);
+}
 
 public partial class Program;

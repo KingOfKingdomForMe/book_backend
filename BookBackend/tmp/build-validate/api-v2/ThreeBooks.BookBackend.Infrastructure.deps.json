@@ -1,0 +1,174 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "ThreeBooks.BookBackend.Infrastructure/1.0.0": {
+        "dependencies": {
+          "AWSSDK.S3": "3.7.413",
+          "Dapper": "2.1.72",
+          "MySqlConnector": "2.5.0",
+          "ThreeBooks.BookBackend.Application": "1.0.0",
+          "ThreeBooks.BookBackend.Contracts": "1.0.0",
+          "ThreeBooks.BookBackend.Domain": "1.0.0"
+        },
+        "runtime": {
+          "ThreeBooks.BookBackend.Infrastructure.dll": {}
+        }
+      },
+      "AWSSDK.Core/3.7.401.5": {
+        "runtime": {
+          "lib/net8.0/AWSSDK.Core.dll": {
+            "assemblyVersion": "3.3.0.0",
+            "fileVersion": "3.7.401.5"
+          }
+        }
+      },
+      "AWSSDK.S3/3.7.413": {
+        "dependencies": {
+          "AWSSDK.Core": "3.7.401.5"
+        },
+        "runtime": {
+          "lib/net8.0/AWSSDK.S3.dll": {
+            "assemblyVersion": "3.3.0.0",
+            "fileVersion": "3.7.413.0"
+          }
+        }
+      },
+      "Dapper/2.1.72": {
+        "runtime": {
+          "lib/net8.0/Dapper.dll": {
+            "assemblyVersion": "2.0.0.0",
+            "fileVersion": "2.1.72.10375"
+          }
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions/8.0.2": {
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.1024.46610"
+          }
+        }
+      },
+      "Microsoft.Extensions.Logging.Abstractions/8.0.2": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.2"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.Logging.Abstractions.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.1024.46610"
+          }
+        }
+      },
+      "MySqlConnector/2.5.0": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.2",
+          "Microsoft.Extensions.Logging.Abstractions": "8.0.2"
+        },
+        "runtime": {
+          "lib/net8.0/MySqlConnector.dll": {
+            "assemblyVersion": "2.0.0.0",
+            "fileVersion": "2.5.0.0"
+          }
+        }
+      },
+      "ThreeBooks.BookBackend.Application/1.0.0": {
+        "dependencies": {
+          "ThreeBooks.BookBackend.Contracts": "1.0.0",
+          "ThreeBooks.BookBackend.Domain": "1.0.0"
+        },
+        "runtime": {
+          "ThreeBooks.BookBackend.Application.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "ThreeBooks.BookBackend.Contracts/1.0.0": {
+        "runtime": {
+          "ThreeBooks.BookBackend.Contracts.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "ThreeBooks.BookBackend.Domain/1.0.0": {
+        "runtime": {
+          "ThreeBooks.BookBackend.Domain.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ThreeBooks.BookBackend.Infrastructure/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AWSSDK.Core/3.7.401.5": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-IbGtR6nDAD722yjGqfMnEc8x7DNOY1QXpSbbKDKe6Tw4LJc2GtovNRa0WKgiCg55volMLW02EtWP+4LcatQUmg==",
+      "path": "awssdk.core/3.7.401.5",
+      "hashPath": "awssdk.core.3.7.401.5.nupkg.sha512"
+    },
+    "AWSSDK.S3/3.7.413": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Nmgu3UpLJ3XT6I5eqBYjOt60jkT5K72c1iHMIVs3sOhEaqv3wUAQJq1KVz5BqsaObiuxva80eFGaoUMhjoM44Q==",
+      "path": "awssdk.s3/3.7.413",
+      "hashPath": "awssdk.s3.3.7.413.nupkg.sha512"
+    },
+    "Dapper/2.1.72": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ns4mGqQd9a/MhP8m6w556vVlZIa0/MfUu03zrxjZC/jlr1uVCsUac8bkdB+Fs98Llbd56rRSo1eZH5VVmeGZyw==",
+      "path": "dapper/2.1.72",
+      "hashPath": "dapper.2.1.72.nupkg.sha512"
+    },
+    "Microsoft.Extensions.DependencyInjection.Abstractions/8.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-3iE7UF7MQkCv1cxzCahz+Y/guQbTqieyxyaWKhrRO91itI9cOKO76OHeQDahqG4MmW5umr3CcCvGmK92lWNlbg==",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/8.0.2",
+      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Logging.Abstractions/8.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-nroMDjS7hNBPtkZqVBbSiQaQjWRDxITI8Y7XnDs97rqG3EbzVTNLZQf7bIeUJcaHOV8bca47s1Uxq94+2oGdxA==",
+      "path": "microsoft.extensions.logging.abstractions/8.0.2",
+      "hashPath": "microsoft.extensions.logging.abstractions.8.0.2.nupkg.sha512"
+    },
+    "MySqlConnector/2.5.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-hoAwfHHF8DlRRqwHOhN3u1KLi+XbX/4LPS7Anfa+SYC97vRyIfdEOEEfj1L50q01Ik8aDNvmDrNmu/VPFiAiaQ==",
+      "path": "mysqlconnector/2.5.0",
+      "hashPath": "mysqlconnector.2.5.0.nupkg.sha512"
+    },
+    "ThreeBooks.BookBackend.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ThreeBooks.BookBackend.Contracts/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ThreeBooks.BookBackend.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

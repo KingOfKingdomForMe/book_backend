@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0",
+  "projectVersionId": 900101,
+  "pageNo": 3,
+  "pageLabel": "序言",
+  "pageType": "preface",
+  "pageSize": {
+    "width": 1200,
+    "height": 1600,
+    "unit": "px"
+  },
+  "theme": {
+    "backgroundColor": "#ffffff",
+    "fontFamily": "Noto Serif SC",
+    "primaryColor": "#2e2a26",
+    "secondaryColor": "#8d7b68"
+  },
+  "blocks": [
+    {
+      "id": "preface-title",
+      "type": "text",
+      "x": 120,
+      "y": 140,
+      "width": 960,
+      "height": 80,
+      "zIndex": 1,
+      "style": {
+        "fontSize": 40,
+        "fontWeight": 700,
+        "textAlign": "left",
+        "color": "#2e2a26"
+      },
+      "text": "序言"
+    },
+    {
+      "id": "preface-body",
+      "type": "richText",
+      "x": 120,
+      "y": 300,
+      "width": 960,
+      "height": 900,
+      "zIndex": 1,
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 400,
+        "lineHeight": 1.9,
+        "textAlign": "justify",
+        "color": "#4a413a"
+      },
+      "text": "翻开这本相册时，希望你看到的不只是照片，而是一段段被认真对待的日常。\n\n我们把路上的风、窗边的光、偶尔失控的笑声，还有那些没说出口的想念，都收进了这一页页里。"
+    },
+    {
+      "id": "preface-author",
+      "type": "text",
+      "x": 740,
+      "y": 1300,
+      "width": 340,
+      "height": 60,
+      "zIndex": 1,
+      "style": {
+        "fontSize": 24,
+        "fontWeight": 400,
+        "textAlign": "right",
+        "color": "#8d7b68"
+      },
+      "text": "2026 春"
+    }
+  ],
+  "mediaRefs": [],
+  "meta": {
+    "renderEngineVersion": "preview-sample-1.0",
+    "generatedAtUtc": "2026-04-20T10:02:00Z",
+    "source": "snapshot"
+  }
+}

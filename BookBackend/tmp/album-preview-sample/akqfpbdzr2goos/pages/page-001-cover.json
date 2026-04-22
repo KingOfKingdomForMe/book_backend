@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "1.0",
+  "projectVersionId": 900101,
+  "pageNo": 1,
+  "pageLabel": "封面",
+  "pageType": "cover",
+  "pageSize": {
+    "width": 1200,
+    "height": 1600,
+    "unit": "px"
+  },
+  "theme": {
+    "backgroundColor": "#f6f0e8",
+    "fontFamily": "Noto Serif SC",
+    "primaryColor": "#5c4632",
+    "secondaryColor": "#caa77a"
+  },
+  "blocks": [
+    {
+      "id": "cover-title",
+      "type": "text",
+      "x": 110,
+      "y": 150,
+      "width": 980,
+      "height": 120,
+      "zIndex": 10,
+      "style": {
+        "fontSize": 54,
+        "fontWeight": 700,
+        "lineHeight": 1.2,
+        "textAlign": "center",
+        "color": "#5c4632"
+      },
+      "text": "我们的纪念"
+    },
+    {
+      "id": "cover-subtitle",
+      "type": "text",
+      "x": 220,
+      "y": 290,
+      "width": 760,
+      "height": 70,
+      "zIndex": 10,
+      "style": {
+        "fontSize": 24,
+        "fontWeight": 400,
+        "lineHeight": 1.4,
+        "textAlign": "center",
+        "color": "#8a6d52"
+      },
+      "text": "把时间折成书页，把日子存成风景"
+    },
+    {
+      "id": "cover-hero",
+      "type": "image",
+      "x": 160,
+      "y": 420,
+      "width": 880,
+      "height": 980,
+      "zIndex": 1,
+      "style": {
+        "objectFit": "cover",
+        "borderRadius": 24,
+        "shadow": "0 20 60 rgba(0,0,0,0.12)"
+      },
+      "mediaRefId": "media-cover-hero"
+    }
+  ],
+  "mediaRefs": [
+    {
+      "id": "media-cover-hero",
+      "fileId": null,
+      "bucket": "bookbackend-dev",
+      "objectKey": "albums/akqfpbdzr2goos/assets/cover-hero.svg",
+      "mimeType": "image/svg+xml",
+      "width": 1200,
+      "height": 1600,
+      "altText": "封面主图"
+    }
+  ],
+  "meta": {
+    "renderEngineVersion": "preview-sample-1.0",
+    "generatedAtUtc": "2026-04-20T10:00:00Z",
+    "source": "snapshot"
+  }
+}

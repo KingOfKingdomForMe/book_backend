@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "projectVersionId": 900101,
+  "pageNo": 2,
+  "pageLabel": "扉页",
+  "pageType": "title",
+  "pageSize": {
+    "width": 1200,
+    "height": 1600,
+    "unit": "px"
+  },
+  "theme": {
+    "backgroundColor": "#fffaf3",
+    "fontFamily": "Noto Serif SC",
+    "primaryColor": "#4a3828",
+    "secondaryColor": "#b19579"
+  },
+  "blocks": [
+    {
+      "id": "title-main",
+      "type": "text",
+      "x": 120,
+      "y": 520,
+      "width": 960,
+      "height": 120,
+      "zIndex": 1,
+      "style": {
+        "fontSize": 62,
+        "fontWeight": 700,
+        "textAlign": "center",
+        "color": "#4a3828"
+      },
+      "text": "我们的纪念"
+    },
+    {
+      "id": "title-desc",
+      "type": "text",
+      "x": 160,
+      "y": 690,
+      "width": 880,
+      "height": 140,
+      "zIndex": 1,
+      "style": {
+        "fontSize": 26,
+        "fontWeight": 400,
+        "lineHeight": 1.6,
+        "textAlign": "center",
+        "color": "#7e6650"
+      },
+      "text": "那些没来得及细说的片段，在这里安静地排成了页。"
+    }
+  ],
+  "mediaRefs": [],
+  "meta": {
+    "renderEngineVersion": "preview-sample-1.0",
+    "generatedAtUtc": "2026-04-20T10:01:00Z",
+    "source": "snapshot"
+  }
+}

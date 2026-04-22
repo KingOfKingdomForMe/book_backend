@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">正文配图</title>
+  <desc id="desc">湖边日落示意图</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffd9b3"/>
+      <stop offset="65%" stop-color="#ffeccf"/>
+      <stop offset="100%" stop-color="#d9eef6"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#7db7c6"/>
+      <stop offset="100%" stop-color="#477a92"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#sky)"/>
+  <circle cx="860" cy="180" r="90" fill="#ffd08f" opacity="0.92"/>
+  <path d="M0 480C130 450 240 430 370 446C522 465 640 540 760 548C910 558 1040 500 1200 468V900H0Z" fill="url(#water)"/>
+  <path d="M0 622C160 590 320 580 470 598C600 612 710 650 840 654C970 658 1070 628 1200 596V900H0Z" fill="#5f92a2" opacity="0.65"/>
+  <path d="M184 598C280 562 354 580 412 636C446 670 470 718 488 780H124C138 710 150 658 184 598Z" fill="#506f56" opacity="0.92"/>
+  <path d="M826 600C910 560 1010 566 1082 628C1130 670 1162 724 1180 780H742C760 718 784 654 826 600Z" fill="#4f6b78" opacity="0.95"/>
+  <path d="M522 564C570 548 618 550 662 576C726 616 756 686 776 780H438C460 672 478 614 522 564Z" fill="#6e7f5d" opacity="0.96"/>
+  <text x="88" y="840" font-size="36" font-family="Noto Sans SC, sans-serif" fill="#ffffff" opacity="0.9">杭州 · 傍晚的西湖边</text>
+</svg>

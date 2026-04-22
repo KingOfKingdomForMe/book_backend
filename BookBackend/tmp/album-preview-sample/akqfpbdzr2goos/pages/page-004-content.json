@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "1.0",
+  "projectVersionId": 900101,
+  "pageNo": 4,
+  "pageLabel": "1",
+  "pageType": "content",
+  "pageSize": {
+    "width": 1200,
+    "height": 1600,
+    "unit": "px"
+  },
+  "theme": {
+    "backgroundColor": "#fbf8f4",
+    "fontFamily": "Noto Sans SC",
+    "primaryColor": "#312a24",
+    "secondaryColor": "#8a7561"
+  },
+  "blocks": [
+    {
+      "id": "content-photo",
+      "type": "image",
+      "x": 110,
+      "y": 110,
+      "width": 980,
+      "height": 860,
+      "zIndex": 1,
+      "style": {
+        "objectFit": "cover",
+        "borderRadius": 20,
+        "shadow": "0 18 40 rgba(0,0,0,0.10)"
+      },
+      "mediaRefId": "media-content-01"
+    },
+    {
+      "id": "content-date",
+      "type": "text",
+      "x": 120,
+      "y": 1030,
+      "width": 260,
+      "height": 40,
+      "zIndex": 2,
+      "style": {
+        "fontSize": 20,
+        "fontWeight": 600,
+        "textAlign": "left",
+        "color": "#8a7561"
+      },
+      "text": "2025.11.16"
+    },
+    {
+      "id": "content-location",
+      "type": "text",
+      "x": 820,
+      "y": 1030,
+      "width": 260,
+      "height": 40,
+      "zIndex": 2,
+      "style": {
+        "fontSize": 20,
+        "fontWeight": 500,
+        "textAlign": "right",
+        "color": "#8a7561"
+      },
+      "text": "杭州"
+    },
+    {
+      "id": "content-text",
+      "type": "richText",
+      "x": 120,
+      "y": 1110,
+      "width": 960,
+      "height": 280,
+      "zIndex": 2,
+      "style": {
+        "fontSize": 28,
+        "fontWeight": 400,
+        "lineHeight": 1.8,
+        "textAlign": "justify",
+        "color": "#312a24"
+      },
+      "text": "我们在西湖边待了很久，天光慢慢暗下去，风也吹得更轻。那天没有什么大事发生，但照片留下来的，是一种刚刚好的平静。"
+    }
+  ],
+  "mediaRefs": [
+    {
+      "id": "media-content-01",
+      "fileId": null,
+      "bucket": "bookbackend-dev",
+      "objectKey": "albums/akqfpbdzr2goos/assets/content-01.svg",
+      "mimeType": "image/svg+xml",
+      "width": 1200,
+      "height": 900,
+      "altText": "正文配图"
+    }
+  ],
+  "meta": {
+    "renderEngineVersion": "preview-sample-1.0",
+    "generatedAtUtc": "2026-04-20T10:03:00Z",
+    "source": "snapshot",
+    "contentDate": "2025-11-16",
+    "location": "杭州"
+  }
+}

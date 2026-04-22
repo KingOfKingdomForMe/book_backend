@@ -11,4 +11,14 @@ public interface IAlbumTemplateService
         ListAlbumTemplatesRequest request,
         RequestContext context,
         CancellationToken cancellationToken);
+
+    Task<AlbumTemplateDetailResponse?> GetDetailAsync(
+        string templateCode,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<CreateAlbumTemplateResponse> CreateAsync(
+        CreateAlbumTemplateRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
 }

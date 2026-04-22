@@ -11,11 +11,56 @@ public sealed class AlbumTemplatesController(IAlbumTemplateService albumTemplate
 {
     [HttpGet]
     [ProducesResponseType<PagedResult<AlbumTemplateListItemResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<AlbumTemplateListItemResponse>>> GetListAsync(
         [FromQuery] ListAlbumTemplatesRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await albumTemplateService.GetListAsync(request, BuildRequestContext(), cancellationToken);
-        return Ok(response);
+        try
+        {
+            var response = await albumTemplateService.GetListAsync(request, BuildRequestContext(), cancellationToken);
+            return Ok(response);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
+    [HttpGet("{templateCode}")]
+    [ProducesResponseType<AlbumTemplateDetailResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<AlbumTemplateDetailResponse>> GetDetailAsync(
+        string templateCode,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await albumTemplateService.GetDetailAsync(templateCode, BuildRequestContext(), cancellationToken);
+            return response is null ? NotFound() : Ok(response);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
+    [HttpPost]
+    [ProducesResponseType<CreateAlbumTemplateResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<CreateAlbumTemplateResponse>> CreateAsync(
+        [FromBody] CreateAlbumTemplateRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await albumTemplateService.CreateAsync(request, BuildRequestContext(), cancellationToken);
+            return StatusCode(StatusCodes.Status201Created, response);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
     }
 }

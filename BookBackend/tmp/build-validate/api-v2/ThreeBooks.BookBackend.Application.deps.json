@@ -1,0 +1,53 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "ThreeBooks.BookBackend.Application/1.0.0": {
+        "dependencies": {
+          "ThreeBooks.BookBackend.Contracts": "1.0.0",
+          "ThreeBooks.BookBackend.Domain": "1.0.0"
+        },
+        "runtime": {
+          "ThreeBooks.BookBackend.Application.dll": {}
+        }
+      },
+      "ThreeBooks.BookBackend.Contracts/1.0.0": {
+        "runtime": {
+          "ThreeBooks.BookBackend.Contracts.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "ThreeBooks.BookBackend.Domain/1.0.0": {
+        "runtime": {
+          "ThreeBooks.BookBackend.Domain.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ThreeBooks.BookBackend.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ThreeBooks.BookBackend.Contracts/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "ThreeBooks.BookBackend.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

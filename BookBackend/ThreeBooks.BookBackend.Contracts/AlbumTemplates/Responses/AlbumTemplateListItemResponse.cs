@@ -1,8 +1,17 @@
 namespace ThreeBooks.BookBackend.Contracts.AlbumTemplates.Responses;
 
 public sealed record AlbumTemplateListItemResponse(
-    Guid Id,
-    string Code,
+    long TemplateId,
+    string TemplateCode,
     string Name,
+    string? Description,
+    string? BookType,
+    string PageType,
+    string? Category,
+    string? ThemeCode,
+    string SchemaVersion,
+    string? PreviewUrl,
+    bool IsBuiltIn,
     bool IsActive,
-    DateTimeOffset UpdatedAtUtc);
+    int SortOrder,
+    DateTime UpdatedAtUtc);
