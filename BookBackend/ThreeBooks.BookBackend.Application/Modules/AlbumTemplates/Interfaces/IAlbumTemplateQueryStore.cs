@@ -16,4 +16,9 @@ public interface IAlbumTemplateQueryStore
     Task<AlbumTemplateCreateResultModel> CreateAsync(
         AlbumTemplateCreateCommandModel command,
         CancellationToken cancellationToken);
+
+    Task<AlbumTemplateDetailQueryModel?> UpdateAsync(
+        string templateCode,
+        AlbumTemplateUpdateCommandModel command,
+        CancellationToken cancellationToken);
 }

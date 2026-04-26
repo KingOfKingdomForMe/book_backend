@@ -11,19 +11,7 @@ public sealed class FileMetadataStore(string connectionString) : IFileMetadataSt
 {
     private const string StorageProvider = "seaweedfs-s3";
     private const string PresignedReadOperation = "presigned_read";
-    private const string GetFileMetadataSql = """
-        SELECT
-            original_file_name AS OriginalFileName,
-            file_name AS FileName,
-            file_extension AS FileExtension,
-            content_type AS ContentType,
-            content_length AS ContentLength
-        FROM storage_file_object
-        WHERE BINARY bucket_name = BINARY @Bucket
-          AND BINARY object_key = BINARY @ObjectKey
-          AND storage_status = 1
-        LIMIT 1;
-        """;
+    private const string GetFileMetadataSql = "usp_FileObject_GetMetadata";
 
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
         ? throw new ArgumentException("File metadata database connection string is required.", nameof(connectionString))
@@ -41,9 +29,10 @@ public sealed class FileMetadataStore(string connectionString) : IFileMetadataSt
                 GetFileMetadataSql,
                 new
                 {
-                    Bucket = bucket,
-                    ObjectKey = objectKey
+                    p_bucket_name = bucket,
+                    p_object_key = objectKey
                 },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
     }
 

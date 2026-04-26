@@ -34,6 +34,8 @@ public interface IRoleService
 {
     Task<IReadOnlyCollection<RoleResponse>> GetRolesAsync(CancellationToken cancellationToken);
 
+    Task<IReadOnlyCollection<PermissionDefinitionResponse>> GetPermissionsAsync(CancellationToken cancellationToken);
+
     Task<RoleResponse> CreateRoleAsync(CreateRoleRequest request, CancellationToken cancellationToken);
 
     Task AssignRolesAsync(Guid userId, AssignUserRolesRequest request, CancellationToken cancellationToken);

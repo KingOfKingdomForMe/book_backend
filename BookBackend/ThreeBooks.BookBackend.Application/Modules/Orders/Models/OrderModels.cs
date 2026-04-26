@@ -52,6 +52,13 @@ public sealed record OrderListFilter(
     int PageNumber,
     int PageSize);
 
+public sealed record AdminOrderListFilter(
+    long? UserId,
+    string? Keyword,
+    int? Status,
+    int PageNumber,
+    int PageSize);
+
 public sealed record OrderListQueryResultModel(
     IReadOnlyCollection<OrderListItemQueryModel> Items,
     int TotalCount);
@@ -157,3 +164,23 @@ public sealed record OrderShipmentEventModel(
     DateTime EventTime,
     string EventDescription,
     string? Location);
+
+public sealed record OrderShipmentEventCreateCommandModel(
+    DateTime EventTimeUtc,
+    string EventDescription,
+    string? Location,
+    int ShipmentStatus,
+    DateTime? ShippedAtUtc,
+    DateTime? DeliveredAtUtc);
+
+public sealed record AdminOrderUpdateCommandModel(
+    int Status,
+    string? Remark,
+    DateTime? PaidAtUtc,
+    DateTime? ClosedAtUtc,
+    string? ShipmentNo,
+    string? CarrierCode,
+    string? CarrierName,
+    int? ShipmentStatus,
+    DateTime? ShippedAtUtc,
+    DateTime? DeliveredAtUtc);

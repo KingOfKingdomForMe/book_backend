@@ -634,7 +634,7 @@ public sealed class AuthService(
     {
         if (string.Equals(roleCode, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
         {
-            return [SystemPermissions.AuthSelf, SystemPermissions.UserManage, SystemPermissions.RoleManage];
+            return SystemPermissionCatalog.DefaultAdminPermissionCodes;
         }
 
         if (string.Equals(roleCode, SystemRoles.User, StringComparison.OrdinalIgnoreCase))

@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using MySqlConnector;
 using ThreeBooks.BookBackend.Application.Modules.AlbumTemplates.Interfaces;
@@ -8,126 +9,14 @@ namespace ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.AlbumTemplat
 
 public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTemplateQueryStore
 {
-    private const string CountSql = """
-        SELECT COUNT(*)
-        FROM album_content_template t
-        WHERE (@Keyword IS NULL
-            OR t.template_code LIKE CONCAT('%', @Keyword, '%')
-            OR t.name LIKE CONCAT('%', @Keyword, '%')
-            OR t.description LIKE CONCAT('%', @Keyword, '%'))
-          AND (@BookType IS NULL OR t.book_type = @BookType)
-          AND (@PageType IS NULL OR t.page_type = @PageType)
-          AND (@Category IS NULL OR t.category = @Category)
-          AND (@IsActive IS NULL OR t.is_active = @IsActive);
-        """;
-
-    private const string ListSql = """
-        SELECT
-            t.id AS TemplateId,
-            t.template_code AS TemplateCode,
-            t.name AS Name,
-            t.description AS Description,
-            t.book_type AS BookType,
-            t.page_type AS PageType,
-            t.category AS Category,
-            t.theme_code AS ThemeCode,
-            t.schema_version AS SchemaVersion,
-            t.is_built_in AS IsBuiltIn,
-            t.is_active AS IsActive,
-            t.sort_order AS SortOrder,
-            t.updated_at AS UpdatedAtUtc,
-            preview.bucket_name AS PreviewBucket,
-            preview.object_key AS PreviewObjectKey
-        FROM album_content_template t
-        LEFT JOIN storage_file_object preview ON preview.id = t.preview_file_id AND preview.storage_status = 1
-        WHERE (@Keyword IS NULL
-            OR t.template_code LIKE CONCAT('%', @Keyword, '%')
-            OR t.name LIKE CONCAT('%', @Keyword, '%')
-            OR t.description LIKE CONCAT('%', @Keyword, '%'))
-          AND (@BookType IS NULL OR t.book_type = @BookType)
-          AND (@PageType IS NULL OR t.page_type = @PageType)
-          AND (@Category IS NULL OR t.category = @Category)
-          AND (@IsActive IS NULL OR t.is_active = @IsActive)
-        ORDER BY t.sort_order ASC, t.updated_at DESC, t.id DESC
-        LIMIT @PageSize OFFSET @Offset;
-        """;
-
-    private const string DetailSql = """
-        SELECT
-            t.id AS TemplateId,
-            t.template_code AS TemplateCode,
-            t.name AS Name,
-            t.description AS Description,
-            t.book_type AS BookType,
-            t.page_type AS PageType,
-            t.category AS Category,
-            t.theme_code AS ThemeCode,
-            t.schema_version AS SchemaVersion,
-            t.json_source AS JsonSource,
-            t.preview_file_id AS PreviewFileId,
-            t.created_by_user_id AS CreatedByUserId,
-            t.is_built_in AS IsBuiltIn,
-            t.is_active AS IsActive,
-            t.sort_order AS SortOrder,
-            t.created_at AS CreatedAtUtc,
-            t.updated_at AS UpdatedAtUtc,
-            preview.bucket_name AS PreviewBucket,
-            preview.object_key AS PreviewObjectKey
-        FROM album_content_template t
-        LEFT JOIN storage_file_object preview ON preview.id = t.preview_file_id AND preview.storage_status = 1
-        WHERE t.template_code = @TemplateCode
-        LIMIT 1;
-        """;
-
-    private const string FindPreviewFileSql = """
-        SELECT id
-        FROM storage_file_object
-        WHERE id = @PreviewFileId
-                    AND storage_status = 1
-        LIMIT 1;
-        """;
-
-    private const string FindCreatorSql = """
-        SELECT id
-        FROM identity_user
-        WHERE id = @CreatedByUserId
-        LIMIT 1;
-        """;
-
-    private const string InsertSql = """
-        INSERT INTO album_content_template (
-            template_code,
-            name,
-            description,
-            book_type,
-            page_type,
-            category,
-            theme_code,
-            schema_version,
-            json_source,
-            preview_file_id,
-            created_by_user_id,
-            is_built_in,
-            is_active,
-            sort_order)
-        VALUES (
-            @TemplateCode,
-            @Name,
-            @Description,
-            @BookType,
-            @PageType,
-            @Category,
-            @ThemeCode,
-            @SchemaVersion,
-            @JsonSource,
-            @PreviewFileId,
-            @CreatedByUserId,
-            @IsBuiltIn,
-            @IsActive,
-            @SortOrder);
-        """;
-
-    private const string LastInsertIdSql = "SELECT LAST_INSERT_ID();";
+    private const string CountSql = "usp_AlbumTemplates_Count";
+    private const string ListSql = "usp_AlbumTemplates_List";
+    private const string DetailSql = "usp_AlbumTemplates_GetDetail";
+    private const string FindPreviewFileSql = "usp_AlbumTemplates_FindPreviewFile";
+    private const string FindCreatorSql = "usp_AlbumTemplates_FindCreator";
+    private const string InsertSql = "usp_AlbumTemplates_Create";
+    private const string UpdateSql = "usp_AlbumTemplates_Update";
+    private const string LastInsertIdSql = "usp_Common_GetLastInsertId";
 
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
         ? throw new ArgumentException("Album template database connection string is required.", nameof(connectionString))
@@ -141,20 +30,28 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
 
         var parameters = new
         {
-            filter.Keyword,
-            filter.BookType,
-            filter.PageType,
-            filter.Category,
-            filter.IsActive,
-            filter.PageSize,
-            Offset = (filter.PageNumber - 1) * filter.PageSize
+            p_keyword = NormalizeNullable(filter.Keyword),
+            p_book_type = NormalizeNullable(filter.BookType),
+            p_page_type = NormalizeNullable(filter.PageType),
+            p_category = NormalizeNullable(filter.Category),
+            p_is_active = filter.IsActive,
+            p_page_size = filter.PageSize,
+            p_offset = (filter.PageNumber - 1) * filter.PageSize
         };
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
-            new CommandDefinition(CountSql, parameters, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                CountSql,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var rows = await connection.QueryAsync<AlbumTemplateListRow>(
-            new CommandDefinition(ListSql, parameters, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                ListSql,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var response = new PagedResult<AlbumTemplateListItemQueryModel>(
             rows.Select(MapListItem).ToArray(),
@@ -174,7 +71,8 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
         var row = await connection.QuerySingleOrDefaultAsync<AlbumTemplateDetailRow>(
             new CommandDefinition(
                 DetailSql,
-                new { TemplateCode = templateCode },
+                new { p_template_code = templateCode },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         return row is null ? null : MapDetail(row);
@@ -192,8 +90,9 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
             var previewFileExists = await connection.ExecuteScalarAsync<long?>(
                 new CommandDefinition(
                     FindPreviewFileSql,
-                    new { command.PreviewFileId },
+                    new { p_preview_file_id = command.PreviewFileId },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             if (!previewFileExists.HasValue)
@@ -207,8 +106,9 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
             var userExists = await connection.ExecuteScalarAsync<long?>(
                 new CommandDefinition(
                     FindCreatorSql,
-                    new { command.CreatedByUserId },
+                    new { p_created_by_user_id = command.CreatedByUserId },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             if (!userExists.HasValue)
@@ -222,8 +122,25 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
             await connection.ExecuteAsync(
                 new CommandDefinition(
                     InsertSql,
-                    command,
+                    new
+                    {
+                        p_template_code = command.TemplateCode,
+                        p_name = command.Name,
+                        p_description = NormalizeNullable(command.Description),
+                        p_book_type = NormalizeNullable(command.BookType),
+                        p_page_type = command.PageType,
+                        p_category = NormalizeNullable(command.Category),
+                        p_theme_code = NormalizeNullable(command.ThemeCode),
+                        p_schema_version = command.SchemaVersion,
+                        p_json_source = command.JsonSource,
+                        p_preview_file_id = command.PreviewFileId,
+                        p_created_by_user_id = command.CreatedByUserId,
+                        p_is_built_in = command.IsBuiltIn,
+                        p_is_active = command.IsActive,
+                        p_sort_order = command.SortOrder
+                    },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
         }
         catch (MySqlException exception) when (exception.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
@@ -232,13 +149,18 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
         }
 
         var templateId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(LastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                LastInsertIdSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var created = await connection.QuerySingleAsync<AlbumTemplateDetailRow>(
             new CommandDefinition(
                 DetailSql,
-                new { TemplateCode = command.TemplateCode },
+                new { p_template_code = command.TemplateCode },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
@@ -248,6 +170,96 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
             created.TemplateCode,
             created.IsActive,
             BuildPreviewFile(created.PreviewBucket, created.PreviewObjectKey));
+    }
+
+    public async Task<AlbumTemplateDetailQueryModel?> UpdateAsync(
+        string templateCode,
+        AlbumTemplateUpdateCommandModel command,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var existing = await connection.QuerySingleOrDefaultAsync<AlbumTemplateDetailRow>(
+            new CommandDefinition(
+                DetailSql,
+                new { p_template_code = templateCode },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        if (existing is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return null;
+        }
+
+        if (command.PreviewFileId.HasValue)
+        {
+            var previewFileExists = await connection.ExecuteScalarAsync<long?>(
+                new CommandDefinition(
+                    FindPreviewFileSql,
+                    new { p_preview_file_id = command.PreviewFileId },
+                    transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: cancellationToken));
+
+            if (!previewFileExists.HasValue)
+            {
+                throw new ArgumentException("Preview file does not exist.", nameof(command.PreviewFileId));
+            }
+        }
+
+        if (command.CreatedByUserId.HasValue)
+        {
+            var userExists = await connection.ExecuteScalarAsync<long?>(
+                new CommandDefinition(
+                    FindCreatorSql,
+                    new { p_created_by_user_id = command.CreatedByUserId },
+                    transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: cancellationToken));
+
+            if (!userExists.HasValue)
+            {
+                throw new ArgumentException("CreatedByUser does not exist.", nameof(command.CreatedByUserId));
+            }
+        }
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                UpdateSql,
+                new
+                {
+                    p_template_code = templateCode,
+                    p_name = command.Name,
+                    p_description = NormalizeNullable(command.Description),
+                    p_book_type = NormalizeNullable(command.BookType),
+                    p_page_type = command.PageType,
+                    p_category = NormalizeNullable(command.Category),
+                    p_theme_code = NormalizeNullable(command.ThemeCode),
+                    p_schema_version = command.SchemaVersion,
+                    p_json_source = command.JsonSource,
+                    p_preview_file_id = command.PreviewFileId,
+                    p_created_by_user_id = command.CreatedByUserId,
+                    p_is_built_in = command.IsBuiltIn,
+                    p_is_active = command.IsActive,
+                    p_sort_order = command.SortOrder
+                },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        var updated = await connection.QuerySingleAsync<AlbumTemplateDetailRow>(
+            new CommandDefinition(
+                DetailSql,
+                new { p_template_code = templateCode },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return MapDetail(updated);
     }
 
     private async Task<MySqlConnection> CreateOpenConnectionAsync(CancellationToken cancellationToken)
@@ -304,6 +316,12 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
         return string.IsNullOrWhiteSpace(bucket) || string.IsNullOrWhiteSpace(objectKey)
             ? null
             : new AlbumTemplateStoredFileReference(bucket, objectKey);
+    }
+
+    private static string? NormalizeNullable(string? value)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
     private class AlbumTemplateListRow

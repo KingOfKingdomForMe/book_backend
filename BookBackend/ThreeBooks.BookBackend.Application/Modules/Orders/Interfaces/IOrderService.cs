@@ -7,6 +7,28 @@ namespace ThreeBooks.BookBackend.Application.Modules.Orders.Interfaces;
 
 public interface IOrderService
 {
+    Task<PagedResult<OrderListItemResponse>> GetAdminOrdersAsync(
+        AdminListOrdersRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<OrderDetailResponse?> GetAdminOrderDetailAsync(
+        string orderNo,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<OrderDetailResponse?> UpdateAdminOrderAsync(
+        string orderNo,
+        AdminUpdateOrderRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<OrderDetailResponse?> AddAdminShipmentEventAsync(
+        string orderNo,
+        AdminAddShipmentEventRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyCollection<ShippingAddressResponse>> GetShippingAddressesAsync(
         long userId,
         RequestContext context,

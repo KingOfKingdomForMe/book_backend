@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using MySqlConnector;
 using ThreeBooks.BookBackend.Application.Modules.Unboxings.Interfaces;
@@ -7,240 +8,181 @@ namespace ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Unboxings;
 
 public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQueryStore
 {
-    private const string UserExistsSql = """
-        SELECT COUNT(*)
-        FROM identity_user
-        WHERE id = @UserId;
-        """;
-
-    private const string PostNoExistsSql = """
-        SELECT COUNT(*)
-        FROM community_unboxing_post
-        WHERE post_no = @PostNo;
-        """;
-
-    private const string CurrentMaxNumericPostNoSql = """
-        SELECT COALESCE(MAX(CAST(post_no AS UNSIGNED)), 40000)
-        FROM community_unboxing_post
-        WHERE post_no REGEXP '^[0-9]+$';
-        """;
-
-    private const string LevelByCodeSql = """
-        SELECT
-            level_code AS LevelCode,
-            level_name AS LevelName,
-            icon_url AS IconUrl
-        FROM community_unboxing_level
-        WHERE level_code = @LevelCode
-        LIMIT 1;
-        """;
-
-    private const string ExistingPostSql = """
-        SELECT
-            id AS PostId,
-            user_id AS UserId
-        FROM community_unboxing_post
-        WHERE post_no = @PostNo
-        LIMIT 1;
-        """;
-
-    private const string InsertPostSql = """
-        INSERT INTO community_unboxing_post (
-            post_no,
-            user_id,
-            author_name,
-            author_avatar,
-            order_item_id,
-            project_version_id,
-            product_label,
-            book_title,
-            level_id,
-            title,
-            content_text,
-            status,
-            is_featured,
-            published_at)
-        VALUES (
-            @PostNo,
-            @UserId,
-            @AuthorName,
-            @AuthorAvatarUrl,
-            @OrderItemId,
-            @ProjectVersionId,
-            @ProductLabel,
-            @BookTitle,
-            (SELECT id FROM community_unboxing_level WHERE level_code = @LevelCode LIMIT 1),
-            @Title,
-            @ContentText,
-            @Status,
-            @IsFeatured,
-            @PublishedAtUtc);
-        """;
-
-    private const string UpdatePostSql = """
-        UPDATE community_unboxing_post
-        SET author_name = @AuthorName,
-            author_avatar = @AuthorAvatarUrl,
-            order_item_id = @OrderItemId,
-            project_version_id = @ProjectVersionId,
-            product_label = @ProductLabel,
-            book_title = @BookTitle,
-            level_id = (SELECT id FROM community_unboxing_level WHERE level_code = @LevelCode LIMIT 1),
-            title = @Title,
-            content_text = @ContentText,
-            status = @Status,
-            is_featured = @IsFeatured,
-            published_at = @PublishedAtUtc,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE post_no = @PostNo;
-        """;
-
-    private const string DeleteMediaSql = """
-        DELETE FROM community_unboxing_media
-        WHERE post_id = @PostId;
-        """;
-
-    private const string DeleteTagsSql = """
-        DELETE FROM community_unboxing_tag
-        WHERE post_id = @PostId;
-        """;
-
-    private const string InsertMediaSql = """
-        INSERT INTO community_unboxing_media (
-            post_id,
-            media_type,
-            storage_url,
-            thumbnail_url,
-            sort_order,
-            width,
-            height)
-        VALUES (
-            @PostId,
-            @MediaType,
-            @StorageUrl,
-            @ThumbnailUrl,
-            @SortOrder,
-            @Width,
-            @Height);
-        """;
-
-    private const string InsertTagSql = """
-        INSERT INTO community_unboxing_tag (
-            post_id,
-            tag_name)
-        VALUES (
-            @PostId,
-            @TagName);
-        """;
-
-    private const string CountSql = """
-        SELECT COUNT(*)
-        FROM community_unboxing_post post
-        LEFT JOIN community_unboxing_level level ON level.id = post.level_id
-        WHERE post.status = 1
-          AND post.published_at IS NOT NULL
-          AND (@LevelCode IS NULL OR level.level_code = @LevelCode)
-          AND (@IsFeatured IS NULL OR post.is_featured = @IsFeatured);
-        """;
-
-    private const string ListSql = """
-        SELECT
-            post.id AS PostId,
-            post.post_no AS PostNo,
-            post.author_name AS AuthorName,
-            post.author_avatar AS AuthorAvatarUrl,
-            post.title AS Title,
-            post.book_title AS BookTitle,
-            post.content_text AS ContentText,
-            post.product_label AS ProductLabel,
-            post.is_featured AS IsFeatured,
-            post.published_at AS PublishedAtUtc,
-            level.level_code AS LevelCode,
-            level.level_name AS LevelName,
-            level.icon_url AS LevelIconUrl,
-            cover.storage_url AS CoverImageUrl,
-            cover.thumbnail_url AS CoverThumbnailUrl
-        FROM community_unboxing_post post
-        LEFT JOIN community_unboxing_level level ON level.id = post.level_id
-        LEFT JOIN community_unboxing_media cover ON cover.id = (
-            SELECT media.id
-            FROM community_unboxing_media media
-            WHERE media.post_id = post.id
-            ORDER BY CASE WHEN media.media_type = 'image' THEN 0 ELSE 1 END, media.sort_order, media.id
-            LIMIT 1
-        )
-        WHERE post.status = 1
-          AND post.published_at IS NOT NULL
-          AND (@LevelCode IS NULL OR level.level_code = @LevelCode)
-          AND (@IsFeatured IS NULL OR post.is_featured = @IsFeatured)
-        ORDER BY post.published_at DESC, post.id DESC
-        LIMIT @PageSize OFFSET @Offset;
-        """;
-
-    private const string DetailSql = """
-        SELECT
-            post.id AS PostId,
-            post.post_no AS PostNo,
-            post.author_name AS AuthorName,
-            post.author_avatar AS AuthorAvatarUrl,
-            post.title AS Title,
-            post.book_title AS BookTitle,
-            post.content_text AS ContentText,
-            post.product_label AS ProductLabel,
-            post.is_featured AS IsFeatured,
-            post.published_at AS PublishedAtUtc,
-            level.level_code AS LevelCode,
-            level.level_name AS LevelName,
-            level.icon_url AS LevelIconUrl
-        FROM community_unboxing_post post
-        LEFT JOIN community_unboxing_level level ON level.id = post.level_id
-        WHERE post.post_no = @PostNo
-          AND post.status = 1
-          AND post.published_at IS NOT NULL
-        LIMIT 1;
-        """;
-
-    private const string MediaSql = """
-        SELECT
-            media_type AS MediaType,
-            storage_url AS StorageUrl,
-            thumbnail_url AS ThumbnailUrl,
-            sort_order AS SortOrder,
-            width AS Width,
-            height AS Height
-        FROM community_unboxing_media
-        WHERE post_id = @PostId
-        ORDER BY sort_order, id;
-        """;
-
-    private const string TagsByPostIdsSql = """
-        SELECT
-            post_id AS PostId,
-            tag_name AS TagName
-        FROM community_unboxing_tag
-        WHERE post_id IN @PostIds
-        ORDER BY id;
-        """;
-
-    private const string TagsByPostIdSql = """
-        SELECT tag_name AS TagName
-        FROM community_unboxing_tag
-        WHERE post_id = @PostId
-        ORDER BY id;
-        """;
-
-    private const string LevelsSql = """
-        SELECT
-            level_code AS LevelCode,
-            level_name AS LevelName,
-            icon_url AS IconUrl
-        FROM community_unboxing_level
-        ORDER BY sort_order, id;
-        """;
+    private const string UserExistsSql = "usp_Unboxing_UserExists";
+    private const string PostNoExistsSql = "usp_Unboxing_PostNoExists";
+    private const string CurrentMaxNumericPostNoSql = "usp_Unboxing_GetCurrentMaxNumericPostNo";
+    private const string LevelByCodeSql = "usp_Unboxing_GetLevelByCode";
+    private const string ExistingPostSql = "usp_Unboxing_FindExistingPost";
+    private const string InsertPostSql = "usp_Unboxing_InsertPost";
+    private const string UpdatePostSql = "usp_Unboxing_UpdatePost";
+    private const string DeleteMediaSql = "usp_Unboxing_DeleteMedia";
+    private const string DeleteTagsSql = "usp_Unboxing_DeleteTags";
+    private const string InsertMediaSql = "usp_Unboxing_InsertMedia";
+    private const string InsertTagSql = "usp_Unboxing_InsertTag";
+    private const string CountSql = "usp_Unboxing_Count";
+    private const string ListSql = "usp_Unboxing_List";
+    private const string DetailSql = "usp_Unboxing_GetDetail";
+    private const string AdminCountSql = "usp_Unboxing_AdminCount";
+    private const string AdminListSql = "usp_Unboxing_AdminList";
+    private const string AdminDetailSql = "usp_Unboxing_AdminGetDetail";
+    private const string DeletePostSql = "usp_Unboxing_DeletePost";
+    private const string MediaSql = "usp_Unboxing_GetMedia";
+    private const string TagsByPostIdsSql = "usp_Unboxing_GetTagsByPostIds";
+    private const string TagsByPostIdSql = "usp_Unboxing_GetTagsByPostId";
+    private const string LevelsSql = "usp_Unboxing_GetLevels";
+    private const string GetLastInsertIdProcedure = "usp_Common_GetLastInsertId";
 
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
         ? throw new ArgumentException("Unboxing database connection string is required.", nameof(connectionString))
         : connectionString;
+
+    public async Task<AdminUnboxingListQueryResultModel> GetAdminListAsync(
+        AdminUnboxingListFilter filter,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+
+        var parameters = new
+        {
+            p_keyword = filter.Keyword,
+            p_level_code = filter.LevelCode,
+            p_is_featured = filter.IsFeatured,
+            p_status = filter.Status,
+            p_page_size = filter.PageSize,
+            p_offset = (filter.PageNumber - 1) * filter.PageSize
+        };
+
+        var totalCount = await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(
+                AdminCountSql,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        var rows = (await connection.QueryAsync<AdminUnboxingListRow>(
+            new CommandDefinition(
+                AdminListSql,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken)))
+            .ToArray();
+
+        var tagLookup = await GetTagLookupAsync(connection, rows.Select(row => row.PostId).ToArray(), cancellationToken);
+
+        var items = rows
+            .Select(row => new AdminUnboxingListItemQueryModel(
+                row.PostId,
+                row.PostNo,
+                row.UserId,
+                row.AuthorName,
+                row.AuthorAvatarUrl,
+                row.Title,
+                row.BookTitle,
+                row.ProductLabel,
+                row.Status,
+                BuildLevel(row.LevelCode, row.LevelName, row.LevelIconUrl),
+                row.CoverImageUrl,
+                row.CoverThumbnailUrl,
+                row.IsFeatured,
+                row.PublishedAtUtc,
+                row.CreatedAtUtc,
+                row.UpdatedAtUtc,
+                tagLookup.TryGetValue(row.PostId, out var tags) ? tags : Array.Empty<string>()))
+            .ToArray();
+
+        return new AdminUnboxingListQueryResultModel(items, totalCount);
+    }
+
+    public async Task<AdminUnboxingDetailQueryModel?> GetAdminDetailAsync(
+        string postNo,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+
+        var row = await connection.QuerySingleOrDefaultAsync<AdminUnboxingDetailRow>(
+            new CommandDefinition(
+                AdminDetailSql,
+                new { p_post_no = postNo },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        var mediaRows = (await connection.QueryAsync<UnboxingMediaRow>(
+            new CommandDefinition(
+                MediaSql,
+                new { p_post_id = row.PostId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken)))
+            .ToArray();
+
+        var tags = (await connection.QueryAsync<string>(
+            new CommandDefinition(
+                TagsByPostIdSql,
+                new { p_post_id = row.PostId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken)))
+            .ToArray();
+
+        return new AdminUnboxingDetailQueryModel(
+            row.PostId,
+            row.PostNo,
+            row.UserId,
+            row.AuthorName,
+            row.AuthorAvatarUrl,
+            row.Title,
+            row.BookTitle,
+            row.ContentText,
+            row.ProductLabel,
+            row.Status,
+            BuildLevel(row.LevelCode, row.LevelName, row.LevelIconUrl),
+            row.IsFeatured,
+            row.PublishedAtUtc,
+            row.CreatedAtUtc,
+            row.UpdatedAtUtc,
+            tags,
+            mediaRows.Select(item => new UnboxingMediaModel(
+                item.MediaType,
+                item.StorageUrl,
+                item.ThumbnailUrl,
+                item.SortOrder,
+                item.Width,
+                item.Height)).ToArray());
+    }
+
+    public async Task<bool> DeleteAsync(
+        string postNo,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var existing = await connection.QuerySingleOrDefaultAsync<ExistingPostRow>(new CommandDefinition(
+            ExistingPostSql,
+            new { p_post_no = postNo },
+            transaction: transaction,
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken));
+
+        if (existing is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            DeletePostSql,
+            new { p_post_no = postNo },
+            transaction: transaction,
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
 
     public async Task<bool> UserExistsAsync(
         long userId,
@@ -249,7 +191,11 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var count = await connection.ExecuteScalarAsync<int>(
-            new CommandDefinition(UserExistsSql, new { UserId = userId }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                UserExistsSql,
+                new { p_user_id = userId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         return count > 0;
     }
@@ -261,7 +207,11 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var count = await connection.ExecuteScalarAsync<int>(
-            new CommandDefinition(PostNoExistsSql, new { PostNo = postNo }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                PostNoExistsSql,
+                new { p_post_no = postNo },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         return count > 0;
     }
@@ -271,7 +221,10 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         return await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(CurrentMaxNumericPostNoSql, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                CurrentMaxNumericPostNoSql,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
     }
 
     public async Task<UnboxingLevelModel?> GetLevelByCodeAsync(
@@ -281,7 +234,11 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         return await connection.QuerySingleOrDefaultAsync<UnboxingLevelModel>(
-            new CommandDefinition(LevelByCodeSql, new { LevelCode = levelCode }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                LevelByCodeSql,
+                new { p_level_code = levelCode },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
     }
 
     public async Task<UnboxingWriteResultModel> CreateAsync(
@@ -295,27 +252,29 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
             InsertPostSql,
             new
             {
-                command.PostNo,
-                command.UserId,
-                command.AuthorName,
-                command.AuthorAvatarUrl,
-                command.OrderItemId,
-                command.ProjectVersionId,
-                command.ProductLabel,
-                command.BookTitle,
-                command.LevelCode,
-                command.Title,
-                command.ContentText,
-                command.Status,
-                command.IsFeatured,
-                command.PublishedAtUtc
+                p_post_no = command.PostNo,
+                p_user_id = command.UserId,
+                p_author_name = command.AuthorName,
+                p_author_avatar_url = command.AuthorAvatarUrl,
+                p_order_item_id = command.OrderItemId,
+                p_project_version_id = command.ProjectVersionId,
+                p_product_label = command.ProductLabel,
+                p_book_title = command.BookTitle,
+                p_level_code = command.LevelCode,
+                p_title = command.Title,
+                p_content_text = command.ContentText,
+                p_status = command.Status,
+                p_is_featured = command.IsFeatured,
+                p_published_at_utc = command.PublishedAtUtc
             },
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
 
         var postId = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT LAST_INSERT_ID();",
+            GetLastInsertIdProcedure,
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
 
         await ReplaceMediaAsync(connection, transaction, postId, command.Media, cancellationToken);
@@ -344,8 +303,9 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
 
         var existing = await connection.QuerySingleOrDefaultAsync<ExistingPostRow>(new CommandDefinition(
             ExistingPostSql,
-            new { PostNo = postNo },
+            new { p_post_no = postNo },
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
 
         if (existing is null)
@@ -358,21 +318,22 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
             UpdatePostSql,
             new
             {
-                PostNo = postNo,
-                command.AuthorName,
-                command.AuthorAvatarUrl,
-                command.OrderItemId,
-                command.ProjectVersionId,
-                command.ProductLabel,
-                command.BookTitle,
-                command.LevelCode,
-                command.Title,
-                command.ContentText,
-                command.Status,
-                command.IsFeatured,
-                command.PublishedAtUtc
+                p_post_no = postNo,
+                p_author_name = command.AuthorName,
+                p_author_avatar_url = command.AuthorAvatarUrl,
+                p_order_item_id = command.OrderItemId,
+                p_project_version_id = command.ProjectVersionId,
+                p_product_label = command.ProductLabel,
+                p_book_title = command.BookTitle,
+                p_level_code = command.LevelCode,
+                p_title = command.Title,
+                p_content_text = command.ContentText,
+                p_status = command.Status,
+                p_is_featured = command.IsFeatured,
+                p_published_at_utc = command.PublishedAtUtc
             },
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
 
         await ReplaceMediaAsync(connection, transaction, existing.PostId, command.Media, cancellationToken);
@@ -399,17 +360,25 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
 
         var parameters = new
         {
-            filter.LevelCode,
-            filter.IsFeatured,
-            filter.PageSize,
-            Offset = (filter.PageNumber - 1) * filter.PageSize
+            p_level_code = filter.LevelCode,
+            p_is_featured = filter.IsFeatured,
+            p_page_size = filter.PageSize,
+            p_offset = (filter.PageNumber - 1) * filter.PageSize
         };
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
-            new CommandDefinition(CountSql, parameters, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                CountSql,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var rows = (await connection.QueryAsync<UnboxingListRow>(
-            new CommandDefinition(ListSql, parameters, cancellationToken: cancellationToken)))
+            new CommandDefinition(
+                ListSql,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken)))
             .ToArray();
 
         var tagLookup = await GetTagLookupAsync(connection, rows.Select(row => row.PostId).ToArray(), cancellationToken);
@@ -442,7 +411,11 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var row = await connection.QuerySingleOrDefaultAsync<UnboxingDetailRow>(
-            new CommandDefinition(DetailSql, new { PostNo = postNo }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                DetailSql,
+                new { p_post_no = postNo },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         if (row is null)
         {
@@ -450,7 +423,11 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         }
 
         var mediaRows = (await connection.QueryAsync<UnboxingMediaRow>(
-            new CommandDefinition(MediaSql, new { PostId = row.PostId }, cancellationToken: cancellationToken)))
+            new CommandDefinition(
+                MediaSql,
+                new { p_post_id = row.PostId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken)))
             .ToArray();
 
         var media = mediaRows
@@ -464,7 +441,11 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
             .ToArray();
 
         var tags = (await connection.QueryAsync<string>(
-            new CommandDefinition(TagsByPostIdSql, new { PostId = row.PostId }, cancellationToken: cancellationToken)))
+            new CommandDefinition(
+                TagsByPostIdSql,
+                new { p_post_id = row.PostId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken)))
             .ToArray();
 
         return new UnboxingDetailQueryModel(
@@ -489,7 +470,10 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var rows = await connection.QueryAsync<UnboxingLevelModel>(
-            new CommandDefinition(LevelsSql, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                LevelsSql,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         return rows.ToArray();
     }
@@ -519,7 +503,11 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
         }
 
         var rows = (await connection.QueryAsync<PostTagRow>(
-            new CommandDefinition(TagsByPostIdsSql, new { PostIds = postIds }, cancellationToken: cancellationToken)))
+            new CommandDefinition(
+                TagsByPostIdsSql,
+                new { p_post_ids = JoinCsv(postIds) },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken)))
             .ToArray();
 
         return rows
@@ -538,8 +526,9 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
     {
         await connection.ExecuteAsync(new CommandDefinition(
             DeleteMediaSql,
-            new { PostId = postId },
+            new { p_post_id = postId },
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
 
         if (media.Count == 0)
@@ -551,15 +540,16 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
             InsertMediaSql,
             media.Select(item => new
             {
-                PostId = postId,
-                item.MediaType,
-                item.StorageUrl,
-                item.ThumbnailUrl,
-                item.SortOrder,
-                item.Width,
-                item.Height
+                p_post_id = postId,
+                p_media_type = item.MediaType,
+                p_storage_url = item.StorageUrl,
+                p_thumbnail_url = item.ThumbnailUrl,
+                p_sort_order = item.SortOrder,
+                p_width = item.Width,
+                p_height = item.Height
             }),
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
     }
 
@@ -572,8 +562,9 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
     {
         await connection.ExecuteAsync(new CommandDefinition(
             DeleteTagsSql,
-            new { PostId = postId },
+            new { p_post_id = postId },
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
 
         if (tags.Count == 0)
@@ -585,11 +576,18 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
             InsertTagSql,
             tags.Select(tag => new
             {
-                PostId = postId,
-                TagName = tag
+                p_post_id = postId,
+                p_tag_name = tag
             }),
             transaction: transaction,
+            commandType: CommandType.StoredProcedure,
             cancellationToken: cancellationToken));
+
+    }
+
+    private static string JoinCsv(IEnumerable<long> values)
+    {
+        return string.Join(',', values);
     }
 
     private class UnboxingListRow
@@ -627,6 +625,50 @@ public sealed class UnboxingQueryStore(string connectionString) : IUnboxingQuery
 
     private sealed class UnboxingDetailRow : UnboxingListRow
     {
+    }
+
+    private class AdminUnboxingListRow
+    {
+        public long PostId { get; init; }
+
+        public string PostNo { get; init; } = string.Empty;
+
+        public long UserId { get; init; }
+
+        public string? AuthorName { get; init; }
+
+        public string? AuthorAvatarUrl { get; init; }
+
+        public string? Title { get; init; }
+
+        public string? BookTitle { get; init; }
+
+        public string? ProductLabel { get; init; }
+
+        public int Status { get; init; }
+
+        public string? LevelCode { get; init; }
+
+        public string? LevelName { get; init; }
+
+        public string? LevelIconUrl { get; init; }
+
+        public string? CoverImageUrl { get; init; }
+
+        public string? CoverThumbnailUrl { get; init; }
+
+        public bool IsFeatured { get; init; }
+
+        public DateTime? PublishedAtUtc { get; init; }
+
+        public DateTime CreatedAtUtc { get; init; }
+
+        public DateTime UpdatedAtUtc { get; init; }
+    }
+
+    private sealed class AdminUnboxingDetailRow : AdminUnboxingListRow
+    {
+        public string? ContentText { get; init; }
     }
 
     private sealed class UnboxingMediaRow

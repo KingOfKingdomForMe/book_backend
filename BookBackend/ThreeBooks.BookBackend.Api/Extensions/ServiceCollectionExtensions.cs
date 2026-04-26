@@ -1,3 +1,9 @@
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using ThreeBooks.BookBackend.Api.Authorization;
 using ThreeBooks.BookBackend.Application.Modules.AlbumTemplates.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.AlbumTemplates.Services;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
@@ -27,7 +33,93 @@ public static class ServiceCollectionExtensions
     {
         services.AddControllers();
         services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen();
+
+        services.Configure<ApiJwtOptions>(configuration.GetSection(ApiJwtOptions.SectionName));
+
+        var jwtOptions = configuration.GetSection(ApiJwtOptions.SectionName).Get<ApiJwtOptions>() ?? new ApiJwtOptions();
+        if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey) || jwtOptions.SigningKey.Length < 32)
+        {
+            throw new InvalidOperationException("Jwt:SigningKey must be configured with at least 32 characters.");
+        }
+
+        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
+
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtOptions.Issuer,
+                    ValidAudience = jwtOptions.Audience,
+                    IssuerSigningKey = signingKey,
+                    ClockSkew = TimeSpan.FromMinutes(1),
+                    NameClaimType = ClaimTypes.Name,
+                    RoleClaimType = ClaimTypes.Role
+                };
+            });
+
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy(
+                BookBackendApiAuthorizationPolicies.OrderManage,
+                policy => policy.RequireAssertion(context =>
+                    BookBackendApiAuthorizationEvaluator.IsAdminOrHasAnyPermission(
+                        context.User,
+                        BookBackendApiPermissions.OrderManage)));
+
+            options.AddPolicy(
+                BookBackendApiAuthorizationPolicies.UnboxingModerate,
+                policy => policy.RequireAssertion(context =>
+                    BookBackendApiAuthorizationEvaluator.IsAdminOrHasAnyPermission(
+                        context.User,
+                        BookBackendApiPermissions.UnboxingModerate)));
+
+            options.AddPolicy(
+                BookBackendApiAuthorizationPolicies.TemplateManage,
+                policy => policy.RequireAssertion(context =>
+                    BookBackendApiAuthorizationEvaluator.IsAdminOrHasAnyPermission(
+                        context.User,
+                        BookBackendApiPermissions.TemplateManage)));
+        });
+
+        services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "ThreeBooks BookBackend API",
+                Version = "v1",
+                Description = "BookBackend catalog, order, album, template, file, and admin APIs."
+            });
+
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                In = ParameterLocation.Header,
+                Description = "Input a JWT access token using the Bearer scheme.",
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                BearerFormat = "JWT",
+                Scheme = "bearer"
+            });
+
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    []
+                }
+            });
+        });
 
         services.AddScoped<IAlbumTemplateService, AlbumTemplateService>();
         services.AddScoped<IAlbumTemplateQueryStore>(_ => new AlbumTemplateQueryStore(

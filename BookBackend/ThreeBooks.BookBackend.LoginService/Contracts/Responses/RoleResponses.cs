@@ -5,3 +5,11 @@ public sealed record RoleResponse(
     string Code,
     string Name,
     IReadOnlyCollection<string> Permissions);
+
+public sealed record PermissionDefinitionResponse(
+    string Code,
+    string Name,
+    string Group,
+    string? Description,
+    bool IsSystem,
+    bool GrantedToAdminByDefault);

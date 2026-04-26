@@ -1,0 +1,10 @@
+DROP PROCEDURE IF EXISTS usp_Common_GetLastInsertId;
+
+DELIMITER $$
+
+CREATE PROCEDURE usp_Common_GetLastInsertId()
+BEGIN
+    SELECT LAST_INSERT_ID();
+END $$
+
+DELIMITER ;

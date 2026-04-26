@@ -121,9 +121,53 @@ public static class SystemPermissions
     public const string UserManage = "user:manage";
 
     public const string RoleManage = "role:manage";
+
+    public const string BookBackendAdmin = "bookbackend:admin";
+
+    public const string BookBackendOrderManage = "bookbackend:order:manage";
+
+    public const string BookBackendUnboxingModerate = "bookbackend:unboxing:moderate";
+
+    public const string BookBackendTemplateManage = "bookbackend:template:manage";
 }
 
 public static class CustomClaimTypes
 {
     public const string Permission = "permission";
+}
+
+public sealed record SystemPermissionDefinition(
+    string Code,
+    string Name,
+    string Group,
+    string? Description,
+    bool GrantToAdminByDefault = true);
+
+public static class SystemPermissionCatalog
+{
+    private static readonly SystemPermissionDefinition[] Definitions =
+    [
+        new(SystemPermissions.AuthSelf, "Authenticate Self", "Authentication", "Sign in, refresh tokens, and manage the current account."),
+        new(SystemPermissions.UserManage, "User Management", "IAM", "Manage user accounts and assignments."),
+        new(SystemPermissions.RoleManage, "Role Management", "IAM", "Manage roles and permission assignments."),
+        new(SystemPermissions.BookBackendAdmin, "BookBackend Administration", "BookBackend", "Access BookBackend administrative APIs."),
+        new(SystemPermissions.BookBackendOrderManage, "BookBackend Order Management", "BookBackend", "View and update orders, shipments, and shipment events."),
+        new(SystemPermissions.BookBackendUnboxingModerate, "BookBackend Unboxing Moderation", "BookBackend", "Review, edit, and remove unboxing content."),
+        new(SystemPermissions.BookBackendTemplateManage, "BookBackend Template Management", "BookBackend", "Create and maintain album template content.")
+    ];
+
+    private static readonly Dictionary<string, SystemPermissionDefinition> DefinitionLookup = Definitions
+        .ToDictionary(definition => definition.Code, StringComparer.OrdinalIgnoreCase);
+
+    public static IReadOnlyCollection<SystemPermissionDefinition> All => Definitions;
+
+    public static IReadOnlyCollection<string> DefaultAdminPermissionCodes { get; } = Definitions
+        .Where(definition => definition.GrantToAdminByDefault)
+        .Select(definition => definition.Code)
+        .ToArray();
+
+    public static bool TryGet(string code, out SystemPermissionDefinition? definition)
+    {
+        return DefinitionLookup.TryGetValue(code, out definition);
+    }
 }

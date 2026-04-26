@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using MySqlConnector;
 using ThreeBooks.BookBackend.Application.Modules.Catalogs.Interfaces;
@@ -9,6 +10,16 @@ namespace ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Catalogs;
 
 public sealed class CatalogQueryStore(string connectionString) : ICatalogQueryStore
 {
+    private const string GetCategoriesCountProcedure = "usp_Catalog_GetCategories_Count";
+    private const string GetCategoriesListProcedure = "usp_Catalog_GetCategories_List";
+    private const string GetCategoryProductsProcedure = "usp_Catalog_GetCategoryProducts_ByCategoryIds";
+    private const string GetProductsCountProcedure = "usp_Catalog_GetProducts_Count";
+    private const string GetProductsListProcedure = "usp_Catalog_GetProducts_List";
+    private const string GetProductDetailHeaderProcedure = "usp_Catalog_GetProductDetail_Header";
+    private const string GetProductDetailSkusProcedure = "usp_Catalog_GetProductDetail_Skus";
+    private const string GetBundlesCountProcedure = "usp_Catalog_GetBundles_Count";
+    private const string GetBundlesListProcedure = "usp_Catalog_GetBundles_List";
+
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
         ? throw new ArgumentException("Catalog database connection string is required.", nameof(connectionString))
         : connectionString;
@@ -17,73 +28,25 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         CategoryListFilter filter,
         CancellationToken cancellationToken)
     {
-        const string countSql = """
-            SELECT COUNT(*)
-            FROM catalog_category c
-            WHERE c.is_active = 1;
-            """;
-
-        const string listSql = """
-            SELECT
-                c.id AS Id,
-                c.name AS Name,
-                c.slug AS Slug,
-                c.sort_order AS SortOrder,
-                COUNT(spu.id) AS ProductCount
-            FROM catalog_category c
-            LEFT JOIN catalog_product_spu spu ON spu.category_id = c.id AND spu.is_active = 1
-            WHERE c.is_active = 1
-            GROUP BY c.id, c.name, c.slug, c.sort_order
-            ORDER BY c.sort_order, c.id
-            LIMIT @PageSize OFFSET @Offset;
-            """;
-
-        const string productSql = """
-            SELECT
-                spu.id AS Id,
-                spu.category_id AS CategoryId,
-                category.name AS CategoryName,
-                category.slug AS CategorySlug,
-                spu.spu_code AS SpuCode,
-                spu.name AS Name,
-                spu.subtitle AS Subtitle,
-                spu.content_source AS ContentSource,
-                COALESCE(price.starting_price, 0) AS StartingPrice,
-                spu.sort_order AS SortOrder
-            FROM catalog_product_spu spu
-            INNER JOIN catalog_category category ON category.id = spu.category_id AND category.is_active = 1
-            LEFT JOIN (
-                SELECT
-                    sku.spu_id,
-                    MIN(pr.base_price + (pr.page_unit_price * sku.min_pages)) AS starting_price
-                FROM catalog_product_sku sku
-                INNER JOIN catalog_price_rule pr ON pr.sku_id = sku.id
-                    AND pr.is_active = 1
-                    AND pr.effective_from <= UTC_TIMESTAMP()
-                    AND (pr.effective_to IS NULL OR pr.effective_to > UTC_TIMESTAMP())
-                WHERE sku.is_active = 1
-                GROUP BY sku.spu_id
-            ) price ON price.spu_id = spu.id
-            WHERE spu.is_active = 1
-              AND spu.category_id IN @CategoryIds
-            ORDER BY category.sort_order, spu.sort_order, spu.id;
-            """;
-
         var parameters = new
         {
-            filter.PageSize,
-            Offset = (filter.PageNumber - 1) * filter.PageSize
+            p_page_size = filter.PageSize,
+            p_offset = (filter.PageNumber - 1) * filter.PageSize
         };
 
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
-            new CommandDefinition(countSql, parameters, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetCategoriesCountProcedure,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var rows = await connection.QueryAsync<CategoryRow>(
             new CommandDefinition(
-                listSql,
+                GetCategoriesListProcedure,
                 parameters,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var categoryRows = rows.ToArray();
@@ -99,8 +62,9 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         {
             var productRows = await connection.QueryAsync<ProductListItemRow>(
                 new CommandDefinition(
-                    productSql,
-                    new { CategoryIds = categoryIds },
+                    GetCategoryProductsProcedure,
+                    new { p_category_ids = JoinCsv(categoryIds) },
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             productsByCategory = productRows
@@ -130,76 +94,30 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         ProductListFilter filter,
         CancellationToken cancellationToken)
     {
-        const string countSql = """
-            SELECT COUNT(*)
-                        FROM catalog_product_spu spu
-                        INNER JOIN catalog_category category ON category.id = spu.category_id AND category.is_active = 1
-            WHERE spu.is_active = 1
-              AND (@CategoryId IS NULL OR spu.category_id = @CategoryId)
-                            AND (@CategorySlug IS NULL OR category.slug = @CategorySlug)
-              AND (
-                    @Keyword IS NULL
-                    OR spu.spu_code LIKE CONCAT('%', @Keyword, '%')
-                    OR spu.name LIKE CONCAT('%', @Keyword, '%')
-                    OR spu.subtitle LIKE CONCAT('%', @Keyword, '%')
-                  );
-            """;
-
-        const string listSql = """
-            SELECT
-                spu.id AS Id,
-                spu.category_id AS CategoryId,
-                category.name AS CategoryName,
-                category.slug AS CategorySlug,
-                spu.spu_code AS SpuCode,
-                spu.name AS Name,
-                spu.subtitle AS Subtitle,
-                spu.content_source AS ContentSource,
-                COALESCE(price.starting_price, 0) AS StartingPrice,
-                spu.sort_order AS SortOrder
-            FROM catalog_product_spu spu
-            INNER JOIN catalog_category category ON category.id = spu.category_id AND category.is_active = 1
-            LEFT JOIN (
-                SELECT
-                    sku.spu_id,
-                    MIN(pr.base_price + (pr.page_unit_price * sku.min_pages)) AS starting_price
-                FROM catalog_product_sku sku
-                INNER JOIN catalog_price_rule pr ON pr.sku_id = sku.id
-                    AND pr.is_active = 1
-                    AND pr.effective_from <= UTC_TIMESTAMP()
-                    AND (pr.effective_to IS NULL OR pr.effective_to > UTC_TIMESTAMP())
-                WHERE sku.is_active = 1
-                GROUP BY sku.spu_id
-            ) price ON price.spu_id = spu.id
-            WHERE spu.is_active = 1
-              AND (@CategoryId IS NULL OR spu.category_id = @CategoryId)
-              AND (@CategorySlug IS NULL OR category.slug = @CategorySlug)
-              AND (
-                    @Keyword IS NULL
-                    OR spu.spu_code LIKE CONCAT('%', @Keyword, '%')
-                    OR spu.name LIKE CONCAT('%', @Keyword, '%')
-                    OR spu.subtitle LIKE CONCAT('%', @Keyword, '%')
-                  )
-            ORDER BY category.sort_order, spu.sort_order, spu.id
-            LIMIT @PageSize OFFSET @Offset;
-            """;
-
         var parameters = new
         {
-            filter.CategoryId,
-            filter.CategorySlug,
-            filter.Keyword,
-            filter.PageSize,
-            Offset = (filter.PageNumber - 1) * filter.PageSize
+            p_category_id = filter.CategoryId,
+            p_category_slug = filter.CategorySlug,
+            p_keyword = filter.Keyword,
+            p_page_size = filter.PageSize,
+            p_offset = (filter.PageNumber - 1) * filter.PageSize
         };
 
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
-            new CommandDefinition(countSql, parameters, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetProductsCountProcedure,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var rows = await connection.QueryAsync<ProductListItemRow>(
-            new CommandDefinition(listSql, parameters, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetProductsListProcedure,
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var items = rows
             .Select(MapProduct)
@@ -216,53 +134,14 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         int spuId,
         CancellationToken cancellationToken)
     {
-        const string detailSql = """
-            SELECT
-                spu.id AS Id,
-                spu.category_id AS CategoryId,
-                spu.spu_code AS SpuCode,
-                spu.name AS Name,
-                spu.subtitle AS Subtitle,
-                spu.content_source AS ContentSource
-            FROM catalog_product_spu spu
-            WHERE spu.id = @SpuId
-              AND spu.is_active = 1;
-            """;
-
-        const string skuSql = """
-            SELECT
-                sku.id AS Id,
-                sku.sku_code AS SkuCode,
-                size_value.value_label AS SizeLabel,
-                binding_value.value_label AS BindingLabel,
-                layout_value.value_label AS LayoutLabel,
-                sku.min_pages AS MinPages,
-                sku.max_pages AS MaxPages,
-                COALESCE(price.base_price, 0) AS BasePrice,
-                COALESCE(price.page_unit_price, 0) AS PageUnitPrice
-            FROM catalog_product_sku sku
-            LEFT JOIN catalog_spec_value size_value ON size_value.id = sku.size_value_id
-            LEFT JOIN catalog_spec_value binding_value ON binding_value.id = sku.binding_value_id
-            LEFT JOIN catalog_spec_value layout_value ON layout_value.id = sku.layout_value_id
-            LEFT JOIN catalog_price_rule price ON price.id = (
-                SELECT pr.id
-                FROM catalog_price_rule pr
-                WHERE pr.sku_id = sku.id
-                  AND pr.is_active = 1
-                  AND pr.effective_from <= UTC_TIMESTAMP()
-                  AND (pr.effective_to IS NULL OR pr.effective_to > UTC_TIMESTAMP())
-                ORDER BY pr.effective_from DESC, pr.id DESC
-                LIMIT 1
-            )
-            WHERE sku.spu_id = @SpuId
-              AND sku.is_active = 1
-            ORDER BY sku.id;
-            """;
-
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var header = await connection.QuerySingleOrDefaultAsync<ProductDetailHeader>(
-            new CommandDefinition(detailSql, new { SpuId = spuId }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetProductDetailHeaderProcedure,
+                new { p_spu_id = spuId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         if (header is null)
         {
@@ -270,7 +149,11 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         }
 
         var skuRows = await connection.QueryAsync<SkuRow>(
-            new CommandDefinition(skuSql, new { SpuId = spuId }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetProductDetailSkusProcedure,
+                new { p_spu_id = spuId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var skus = skuRows
             .Select(row => new SkuResponse(
@@ -299,40 +182,23 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         BundleListFilter filter,
         CancellationToken cancellationToken)
     {
-        const string countSql = """
-            SELECT COUNT(*)
-            FROM catalog_bundle
-            WHERE is_active = 1;
-            """;
-
-        const string listSql = """
-            SELECT
-                id AS Id,
-                bundle_code AS BundleCode,
-                name AS Name,
-                description AS Description,
-                bundle_price AS BundlePrice,
-                COALESCE(original_price, bundle_price) AS OriginalPrice,
-                sort_order AS SortOrder
-            FROM catalog_bundle
-            WHERE is_active = 1
-            ORDER BY sort_order, id
-            LIMIT @PageSize OFFSET @Offset;
-            """;
-
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
-            new CommandDefinition(countSql, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetBundlesCountProcedure,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var rows = await connection.QueryAsync<BundleRow>(
             new CommandDefinition(
-                listSql,
+                GetBundlesListProcedure,
                 new
                 {
-                    filter.PageSize,
-                    Offset = (filter.PageNumber - 1) * filter.PageSize
+                    p_page_size = filter.PageSize,
+                    p_offset = (filter.PageNumber - 1) * filter.PageSize
                 },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var items = rows
@@ -358,6 +224,11 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         return connection;
+    }
+
+    private static string JoinCsv(IEnumerable<long> values)
+    {
+        return string.Join(',', values);
     }
 
     private static ProductListItemResponse MapProduct(ProductListItemRow row)

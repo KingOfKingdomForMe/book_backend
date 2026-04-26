@@ -26,6 +26,189 @@ public sealed class OrderService(IOrderQueryStore queryStore) : IOrderService
 
     private static readonly Regex OrderNoPattern = new("^[A-Za-z0-9_-]{6,32}$", RegexOptions.Compiled);
 
+    public async Task<PagedResult<OrderListItemResponse>> GetAdminOrdersAsync(
+        AdminListOrdersRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var filter = new AdminOrderListFilter(
+            NormalizeNullableId(request.UserId, nameof(request.UserId)),
+            NormalizeOptionalText(request.Keyword, 64, nameof(request.Keyword)),
+            NormalizeStatusFilter(request.Status),
+            NormalizePageNumber(request.PageNumber),
+            NormalizePageSize(request.PageSize));
+
+        var result = await queryStore.GetAdminOrdersAsync(filter, cancellationToken);
+
+        var items = result.Items
+            .Select(item => new OrderListItemResponse(
+                item.OrderId,
+                item.OrderNo,
+                item.Status,
+                item.ItemCount,
+                item.TotalAmount,
+                item.PayAmount,
+                item.ProjectTitle,
+                item.ProductName,
+                item.SkuCode,
+                item.Quantity,
+                item.CreatedAt,
+                item.PaidAt,
+                item.ShipmentNo,
+                item.ShipmentStatus))
+            .ToArray();
+
+        return new PagedResult<OrderListItemResponse>(
+            items,
+            filter.PageNumber,
+            filter.PageSize,
+            result.TotalCount);
+    }
+
+    public async Task<OrderDetailResponse?> GetAdminOrderDetailAsync(
+        string orderNo,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        var normalizedOrderNo = NormalizeOrderNo(orderNo);
+        var detail = await queryStore.GetAdminOrderDetailAsync(normalizedOrderNo, cancellationToken);
+        return detail is null ? null : MapOrderDetail(detail);
+    }
+
+    public async Task<OrderDetailResponse?> UpdateAdminOrderAsync(
+        string orderNo,
+        AdminUpdateOrderRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var normalizedOrderNo = NormalizeOrderNo(orderNo);
+        var existing = await queryStore.GetAdminOrderDetailAsync(normalizedOrderNo, cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var normalizedStatus = NormalizeOrderStatus(request.Status);
+        var normalizedRemark = NormalizeOptionalText(request.Remark, 500, nameof(request.Remark));
+
+        var paidAtUtc = request.PaidAtUtc?.ToUniversalTime()
+            ?? existing.PaidAt
+            ?? (normalizedStatus is > 0 and < 7 ? DateTime.UtcNow : null);
+
+        var closedAtUtc = normalizedStatus is 7 or 8
+            ? request.ClosedAtUtc?.ToUniversalTime() ?? existing.ClosedAt ?? DateTime.UtcNow
+            : existing.ClosedAt;
+
+        var hasShipmentMutation = !string.IsNullOrWhiteSpace(request.ShipmentNo)
+            || !string.IsNullOrWhiteSpace(request.CarrierCode)
+            || !string.IsNullOrWhiteSpace(request.CarrierName)
+            || request.ShipmentStatus.HasValue
+            || request.ShippedAtUtc.HasValue
+            || request.DeliveredAtUtc.HasValue;
+
+        var shipmentNo = NormalizeOptionalText(request.ShipmentNo, 32, nameof(request.ShipmentNo))
+            ?? existing.Shipment?.ShipmentNo;
+        var carrierCode = NormalizeOptionalText(request.CarrierCode, 32, nameof(request.CarrierCode))
+            ?? existing.Shipment?.CarrierCode;
+        var carrierName = NormalizeOptionalText(request.CarrierName, 64, nameof(request.CarrierName))
+            ?? existing.Shipment?.CarrierName;
+        var shipmentStatus = request.ShipmentStatus.HasValue
+            ? NormalizeShipmentStatus(request.ShipmentStatus.Value)
+            : existing.Shipment?.Status;
+        var shippedAtUtc = request.ShippedAtUtc?.ToUniversalTime() ?? existing.Shipment?.ShippedAt;
+        var deliveredAtUtc = request.DeliveredAtUtc?.ToUniversalTime() ?? existing.Shipment?.DeliveredAt;
+
+        if (hasShipmentMutation && (string.IsNullOrWhiteSpace(shipmentNo) || string.IsNullOrWhiteSpace(carrierCode)))
+        {
+            throw new ArgumentException("ShipmentNo and CarrierCode are required when updating shipment information.");
+        }
+
+        if (deliveredAtUtc.HasValue && !shippedAtUtc.HasValue)
+        {
+            shippedAtUtc = deliveredAtUtc;
+        }
+
+        var updated = await queryStore.UpdateAdminOrderAsync(
+            normalizedOrderNo,
+            new AdminOrderUpdateCommandModel(
+                normalizedStatus,
+                normalizedRemark,
+                paidAtUtc,
+                closedAtUtc,
+                hasShipmentMutation || existing.Shipment is not null ? shipmentNo : null,
+                hasShipmentMutation || existing.Shipment is not null ? carrierCode : null,
+                hasShipmentMutation || existing.Shipment is not null ? carrierName : null,
+                hasShipmentMutation || existing.Shipment is not null ? shipmentStatus : null,
+                hasShipmentMutation || existing.Shipment is not null ? shippedAtUtc : null,
+                hasShipmentMutation || existing.Shipment is not null ? deliveredAtUtc : null),
+            cancellationToken);
+
+        if (!updated)
+        {
+            return null;
+        }
+
+        var detail = await queryStore.GetAdminOrderDetailAsync(normalizedOrderNo, cancellationToken);
+        return detail is null ? null : MapOrderDetail(detail);
+    }
+
+    public async Task<OrderDetailResponse?> AddAdminShipmentEventAsync(
+        string orderNo,
+        AdminAddShipmentEventRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var normalizedOrderNo = NormalizeOrderNo(orderNo);
+        var existing = await queryStore.GetAdminOrderDetailAsync(normalizedOrderNo, cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        if (existing.Shipment is null)
+        {
+            throw new ArgumentException("Order does not have shipment information yet.", nameof(orderNo));
+        }
+
+        var eventTimeUtc = request.EventTimeUtc?.ToUniversalTime() ?? DateTime.UtcNow;
+        var shipmentStatus = request.ShipmentStatus.HasValue
+            ? NormalizeShipmentStatus(request.ShipmentStatus.Value)
+            : existing.Shipment.Status;
+
+        var deliveredAtUtc = request.DeliveredAtUtc?.ToUniversalTime()
+            ?? existing.Shipment.DeliveredAt
+            ?? (shipmentStatus == 3 ? eventTimeUtc : null);
+
+        var shippedAtUtc = request.ShippedAtUtc?.ToUniversalTime()
+            ?? existing.Shipment.ShippedAt
+            ?? (shipmentStatus >= 1 ? eventTimeUtc : null);
+
+        var appended = await queryStore.AddAdminShipmentEventAsync(
+            normalizedOrderNo,
+            new OrderShipmentEventCreateCommandModel(
+                eventTimeUtc,
+                NormalizeRequiredText(request.EventDescription, nameof(request.EventDescription), 512),
+                NormalizeOptionalText(request.Location, 256, nameof(request.Location)),
+                shipmentStatus,
+                shippedAtUtc,
+                deliveredAtUtc),
+            cancellationToken);
+
+        if (!appended)
+        {
+            return null;
+        }
+
+        var detail = await queryStore.GetAdminOrderDetailAsync(normalizedOrderNo, cancellationToken);
+        return detail is null ? null : MapOrderDetail(detail);
+    }
+
     public Task<IReadOnlyCollection<ShippingAddressResponse>> GetShippingAddressesAsync(
         long userId,
         RequestContext context,
@@ -147,54 +330,7 @@ public sealed class OrderService(IOrderQueryStore queryStore) : IOrderService
             return null;
         }
 
-        return new OrderDetailResponse(
-            detail.OrderId,
-            detail.OrderNo,
-            detail.UserId,
-            detail.OrderType,
-            detail.Status,
-            detail.ItemCount,
-            detail.TotalAmount,
-            detail.DiscountAmount,
-            detail.FreightAmount,
-            detail.PayAmount,
-            new OrderShippingSnapshotResponse(
-                detail.ShippingSnapshot.ReceiverName,
-                detail.ShippingSnapshot.Phone,
-                detail.ShippingSnapshot.Province,
-                detail.ShippingSnapshot.City,
-                detail.ShippingSnapshot.District,
-                detail.ShippingSnapshot.Address,
-                detail.ShippingSnapshot.PostalCode),
-            detail.Remark,
-            detail.CreatedAt,
-            detail.PaidAt,
-            detail.ClosedAt,
-            detail.Items.Select(MapOrderItem).ToArray(),
-            detail.Payment is null
-                ? null
-                : new OrderPaymentResponse(
-                    detail.Payment.PaymentId,
-                    detail.Payment.PaymentNo,
-                    detail.Payment.PayChannel,
-                    detail.Payment.PayAmount,
-                    detail.Payment.Status,
-                    detail.Payment.PaidAt,
-                    detail.Payment.ExpiredAt),
-            detail.Shipment is null
-                ? null
-                : new OrderShipmentResponse(
-                    detail.Shipment.ShipmentId,
-                    detail.Shipment.ShipmentNo,
-                    detail.Shipment.CarrierCode,
-                    detail.Shipment.CarrierName,
-                    detail.Shipment.Status,
-                    detail.Shipment.ShippedAt,
-                    detail.Shipment.DeliveredAt,
-                    detail.Shipment.Events.Select(eventItem => new OrderShipmentEventResponse(
-                        eventItem.EventTime,
-                        eventItem.EventDescription,
-                        eventItem.Location)).ToArray()));
+        return MapOrderDetail(detail);
     }
 
     private async Task<IReadOnlyCollection<ShippingAddressResponse>> GetShippingAddressesCoreAsync(
@@ -253,6 +389,58 @@ public sealed class OrderService(IOrderQueryStore queryStore) : IOrderService
                     item.PriceSnapshot.BundleCode,
                     item.PriceSnapshot.BundleName,
                     item.PriceSnapshot.EstimatedShipDate));
+    }
+
+    private static OrderDetailResponse MapOrderDetail(OrderDetailQueryModel detail)
+    {
+        return new OrderDetailResponse(
+            detail.OrderId,
+            detail.OrderNo,
+            detail.UserId,
+            detail.OrderType,
+            detail.Status,
+            detail.ItemCount,
+            detail.TotalAmount,
+            detail.DiscountAmount,
+            detail.FreightAmount,
+            detail.PayAmount,
+            new OrderShippingSnapshotResponse(
+                detail.ShippingSnapshot.ReceiverName,
+                detail.ShippingSnapshot.Phone,
+                detail.ShippingSnapshot.Province,
+                detail.ShippingSnapshot.City,
+                detail.ShippingSnapshot.District,
+                detail.ShippingSnapshot.Address,
+                detail.ShippingSnapshot.PostalCode),
+            detail.Remark,
+            detail.CreatedAt,
+            detail.PaidAt,
+            detail.ClosedAt,
+            detail.Items.Select(MapOrderItem).ToArray(),
+            detail.Payment is null
+                ? null
+                : new OrderPaymentResponse(
+                    detail.Payment.PaymentId,
+                    detail.Payment.PaymentNo,
+                    detail.Payment.PayChannel,
+                    detail.Payment.PayAmount,
+                    detail.Payment.Status,
+                    detail.Payment.PaidAt,
+                    detail.Payment.ExpiredAt),
+            detail.Shipment is null
+                ? null
+                : new OrderShipmentResponse(
+                    detail.Shipment.ShipmentId,
+                    detail.Shipment.ShipmentNo,
+                    detail.Shipment.CarrierCode,
+                    detail.Shipment.CarrierName,
+                    detail.Shipment.Status,
+                    detail.Shipment.ShippedAt,
+                    detail.Shipment.DeliveredAt,
+                    detail.Shipment.Events.Select(eventItem => new OrderShipmentEventResponse(
+                        eventItem.EventTime,
+                        eventItem.EventDescription,
+                        eventItem.Location)).ToArray()));
     }
 
     private static long NormalizePositiveId(long value, string parameterName)
@@ -376,6 +564,26 @@ public sealed class OrderService(IOrderQueryStore queryStore) : IOrderService
         }
 
         return status.Value;
+    }
+
+    private static int NormalizeOrderStatus(int status)
+    {
+        if (status is < 0 or > 8)
+        {
+            throw new ArgumentOutOfRangeException(nameof(status), "Status must be between 0 and 8.");
+        }
+
+        return status;
+    }
+
+    private static int NormalizeShipmentStatus(int status)
+    {
+        if (status is < 0 or > 4)
+        {
+            throw new ArgumentOutOfRangeException(nameof(status), "Shipment status must be between 0 and 4.");
+        }
+
+        return status;
     }
 
     private static string NormalizeOrderNo(string orderNo)

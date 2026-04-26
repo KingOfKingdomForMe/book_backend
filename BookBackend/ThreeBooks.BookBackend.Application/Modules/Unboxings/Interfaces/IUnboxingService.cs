@@ -7,6 +7,21 @@ namespace ThreeBooks.BookBackend.Application.Modules.Unboxings.Interfaces;
 
 public interface IUnboxingService
 {
+    Task<PagedResult<AdminUnboxingListItemResponse>> GetAdminListAsync(
+        AdminListUnboxingsRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<AdminUnboxingDetailResponse?> GetAdminDetailAsync(
+        string postNo,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(
+        string postNo,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
     Task<SaveUnboxingResponse> CreateAsync(
         CreateUnboxingRequest request,
         RequestContext context,

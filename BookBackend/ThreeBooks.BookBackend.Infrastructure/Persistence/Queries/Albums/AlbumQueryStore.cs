@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using Dapper;
 using MySqlConnector;
@@ -8,370 +9,31 @@ namespace ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Albums;
 
 public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
 {
-    private const string FindProductIdSql = """
-        SELECT id
-        FROM catalog_product_spu
-        WHERE spu_code = @ProductCode
-          AND is_active = 1
-        LIMIT 1;
-        """;
-
-    private const string FindProjectByShareCodeSql = """
-        SELECT id
-        FROM book_project
-        WHERE share_code = @ShareCode
-        LIMIT 1;
-        """;
-
-    private const string InsertProjectSql = """
-        INSERT INTO book_project (
-            user_id,
-            book_type,
-            title,
-            subtitle,
-            status,
-            spu_id,
-            page_count,
-            image_count,
-            is_gift,
-            gift_target_name,
-            share_code,
-            is_public,
-            shared_version_id,
-            shared_at,
-            view_count,
-            share_count)
-        VALUES (
-            @UserId,
-            @BookType,
-            @Title,
-            @Subtitle,
-            @Status,
-            @SpuId,
-            0,
-            0,
-            0,
-            NULL,
-            @ShareCode,
-            @IsPublic,
-            NULL,
-            @SharedAt,
-            0,
-            0);
-        """;
-
-    private const string InsertVersionSql = """
-        INSERT INTO book_project_version (
-            project_id,
-            version_no,
-            snapshot_data,
-            page_count,
-            image_count,
-            render_version,
-            frozen_at)
-        VALUES (
-            @ProjectId,
-            @VersionNo,
-            @SnapshotData,
-            0,
-            0,
-            @RenderVersion,
-            UTC_TIMESTAMP());
-        """;
-
-    private const string UpdateProjectSharedVersionSql = """
-        UPDATE book_project
-        SET shared_version_id = @VersionId,
-            shared_at = @SharedAt,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = @ProjectId;
-        """;
-
-    private const string FindProjectSql = """
-        SELECT
-            p.id AS ProjectId,
-            p.share_code AS ShareCode,
-            p.title AS Title,
-            p.subtitle AS Subtitle,
-            p.book_type AS BookType,
-            spu.spu_code AS ProductCode,
-            p.page_count AS PageCount,
-            p.view_count AS ViewCount,
-            p.share_count AS ShareCount,
-            p.shared_version_id AS SharedVersionId
-        FROM book_project p
-        LEFT JOIN catalog_product_spu spu ON spu.id = p.spu_id AND spu.is_active = 1
-        WHERE p.share_code = @ShareCode
-          AND p.is_public = 1
-          AND p.shared_version_id IS NOT NULL
-        LIMIT 1;
-        """;
-
-    private const string FindPagesSql = """
-        SELECT
-            vp.page_no AS PageNo,
-            vp.page_label AS PageLabel,
-            vp.page_type AS PageType,
-            vp.json_source AS JsonSource,
-            vp.json_file_id AS JsonFileId,
-            vp.json_bucket AS JsonBucket,
-            vp.json_object_key AS JsonObjectKey,
-            vp.html_file_id AS HtmlFileId,
-            vp.html_bucket AS HtmlBucket,
-            vp.html_object_key AS HtmlObjectKey,
-            vp.thumbnail_file_id AS ThumbnailFileId,
-            vp.thumbnail_bucket AS ThumbnailBucket,
-            vp.thumbnail_object_key AS ThumbnailObjectKey,
-            CASE WHEN image_stats.asset_count > 0 THEN TRUE ELSE FALSE END AS HasImages
-        FROM book_project_version_page vp
-        LEFT JOIN (
-            SELECT
-                version_page_id,
-                COUNT(*) AS asset_count
-            FROM book_project_version_page_asset
-            GROUP BY version_page_id
-        ) image_stats ON image_stats.version_page_id = vp.id
-        WHERE vp.project_version_id = @ProjectVersionId
-        ORDER BY vp.sort_order, vp.page_no;
-        """;
-
-    private const string FindPageSql = """
-        SELECT
-            vp.id AS VersionPageId,
-            vp.page_no AS PageNo,
-            vp.page_label AS PageLabel,
-            vp.page_type AS PageType,
-            vp.schema_version AS SchemaVersion,
-            vp.json_source AS JsonSource,
-            vp.json_file_id AS JsonFileId,
-            vp.json_bucket AS JsonBucket,
-            vp.json_object_key AS JsonObjectKey,
-            vp.html_file_id AS HtmlFileId,
-            vp.html_bucket AS HtmlBucket,
-            vp.html_object_key AS HtmlObjectKey
-        FROM book_project p
-        INNER JOIN book_project_version_page vp ON vp.project_version_id = p.shared_version_id
-        WHERE p.share_code = @ShareCode
-          AND p.is_public = 1
-          AND vp.page_no = @PageNo
-        LIMIT 1;
-        """;
-
-    private const string FindPageAssetsSql = """
-        SELECT
-            a.sort_order AS SortOrder,
-            a.role AS Role,
-            a.file_id AS FileId,
-            a.bucket_name AS Bucket,
-            a.object_key AS ObjectKey,
-            a.width AS Width,
-            a.height AS Height,
-            a.alt_text AS AltText,
-            a.caption AS Caption
-        FROM book_project_version_page_asset a
-        WHERE a.version_page_id = @VersionPageId
-        ORDER BY a.sort_order, a.id;
-        """;
-
-    private const string FindProjectForMutationSql = """
-        SELECT id AS ProjectId
-        FROM book_project
-        WHERE share_code = @ShareCode
-          AND is_public = 1
-        LIMIT 1;
-        """;
-
-    private const string FindProjectForWriteSql = """
-        SELECT
-            p.id AS ProjectId,
-            p.share_code AS ShareCode,
-            p.shared_version_id AS SharedVersionId,
-            p.is_public AS IsPublic
-        FROM book_project p
-        WHERE p.share_code = @ShareCode
-        LIMIT 1;
-        """;
-
-    private const string FindActiveFilesSql = """
-        SELECT
-            id AS FileId,
-            bucket_name AS Bucket,
-            object_key AS ObjectKey
-        FROM storage_file_object
-        WHERE id IN @FileIds
-          AND storage_status = 1;
-        """;
-
-    private const string InsertVersionPageSql = """
-        INSERT INTO book_project_version_page (
-            project_version_id,
-            page_no,
-            page_label,
-            page_type,
-            sort_order,
-            json_source,
-            json_file_id,
-            json_bucket,
-            json_object_key,
-            html_file_id,
-            html_bucket,
-            html_object_key,
-            thumbnail_file_id,
-            thumbnail_bucket,
-            thumbnail_object_key,
-            page_width,
-            page_height,
-            schema_version)
-        VALUES (
-            @ProjectVersionId,
-            @PageNo,
-            @PageLabel,
-            @PageType,
-            @SortOrder,
-            @JsonSource,
-            @JsonFileId,
-            @JsonBucket,
-            @JsonObjectKey,
-            @HtmlFileId,
-            @HtmlBucket,
-            @HtmlObjectKey,
-            @ThumbnailFileId,
-            @ThumbnailBucket,
-            @ThumbnailObjectKey,
-            @PageWidth,
-            @PageHeight,
-            @SchemaVersion);
-        """;
-
-    private const string InsertVersionPageAssetSql = """
-        INSERT INTO book_project_version_page_asset (
-            version_page_id,
-            sort_order,
-            role,
-            file_id,
-            bucket_name,
-            object_key,
-            width,
-            height,
-            alt_text,
-            caption,
-            crop_json,
-            created_at)
-        VALUES (
-            @VersionPageId,
-            @SortOrder,
-            @Role,
-            @FileId,
-            @BucketName,
-            @ObjectKey,
-            @Width,
-            @Height,
-            @AltText,
-            @Caption,
-            @CropJson,
-            UTC_TIMESTAMP());
-        """;
-
-    private const string DeleteVersionPageAssetsSql = """
-        DELETE asset
-        FROM book_project_version_page_asset asset
-        INNER JOIN book_project_version_page page ON page.id = asset.version_page_id
-        WHERE page.project_version_id = @ProjectVersionId;
-        """;
-
-    private const string DeleteVersionPagesSql = """
-        DELETE FROM book_project_version_page
-        WHERE project_version_id = @ProjectVersionId;
-        """;
-
-    private const string FindVersionStatsSql = """
-        SELECT
-            (SELECT COUNT(*)
-             FROM book_project_version_page
-             WHERE project_version_id = @ProjectVersionId) AS PageCount,
-            (SELECT COUNT(*)
-             FROM book_project_version_page_asset asset
-             INNER JOIN book_project_version_page page ON page.id = asset.version_page_id
-             WHERE page.project_version_id = @ProjectVersionId) AS ImageCount;
-        """;
-
-    private const string FindSnapshotPagesSql = """
-        SELECT
-            page_no AS PageNo,
-            page_label AS PageLabel,
-            page_type AS PageType
-        FROM book_project_version_page
-        WHERE project_version_id = @ProjectVersionId
-        ORDER BY sort_order, page_no;
-        """;
-
-    private const string UpdateProjectVersionSnapshotSql = """
-        UPDATE book_project_version
-        SET snapshot_data = @SnapshotData,
-            page_count = @PageCount,
-            image_count = @ImageCount
-        WHERE id = @ProjectVersionId;
-        """;
-
-    private const string UpdateProjectCountsSql = """
-        UPDATE book_project
-        SET page_count = @PageCount,
-            image_count = @ImageCount,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = @ProjectId;
-        """;
-
-    private const string InsertViewLogSql = """
-        INSERT INTO book_project_view_log (
-            project_id,
-            share_code,
-            page_no,
-            client_ip,
-            client_user_agent,
-            created_at)
-        VALUES (
-            @ProjectId,
-            @ShareCode,
-            @PageNo,
-            @ClientIp,
-            @ClientUserAgent,
-            UTC_TIMESTAMP());
-        """;
-
-    private const string InsertShareLogSql = """
-        INSERT INTO book_project_share_log (
-            project_id,
-            share_code,
-            channel,
-            client_ip,
-            client_user_agent,
-            created_at)
-        VALUES (
-            @ProjectId,
-            @ShareCode,
-            @Channel,
-            @ClientIp,
-            @ClientUserAgent,
-            UTC_TIMESTAMP());
-        """;
-
-    private const string IncrementViewCountSql = """
-        UPDATE book_project
-        SET view_count = view_count + 1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = @ProjectId;
-        """;
-
-    private const string IncrementShareCountSql = """
-        UPDATE book_project
-        SET share_count = share_count + 1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = @ProjectId;
-        """;
-
-    private const string GetLastInsertIdSql = """
-        SELECT LAST_INSERT_ID();
-        """;
+    private const string FindProductIdSql = "usp_Album_FindProductId";
+    private const string FindProjectByShareCodeSql = "usp_Album_FindProjectByShareCode";
+    private const string InsertProjectSql = "usp_Album_InsertProject";
+    private const string InsertVersionSql = "usp_Album_InsertVersion";
+    private const string UpdateProjectSharedVersionSql = "usp_Album_UpdateProjectSharedVersion";
+    private const string FindProjectSql = "usp_Album_FindProjectPreview";
+    private const string FindPagesSql = "usp_Album_FindPagesByVersion";
+    private const string FindPageSql = "usp_Album_FindPageByShareCodeAndPageNo";
+    private const string FindPageAssetsSql = "usp_Album_FindPageAssetsByVersionPage";
+    private const string FindProjectForMutationSql = "usp_Album_FindProjectForMutation";
+    private const string FindProjectForWriteSql = "usp_Album_FindProjectForWrite";
+    private const string FindActiveFilesSql = "usp_Album_FindActiveFilesByIds";
+    private const string InsertVersionPageSql = "usp_Album_InsertVersionPage";
+    private const string InsertVersionPageAssetSql = "usp_Album_InsertVersionPageAsset";
+    private const string DeleteVersionPageAssetsSql = "usp_Album_DeleteVersionPageAssets";
+    private const string DeleteVersionPagesSql = "usp_Album_DeleteVersionPages";
+    private const string FindVersionStatsSql = "usp_Album_FindVersionStats";
+    private const string FindSnapshotPagesSql = "usp_Album_FindSnapshotPages";
+    private const string UpdateProjectVersionSnapshotSql = "usp_Album_UpdateProjectVersionSnapshot";
+    private const string UpdateProjectCountsSql = "usp_Album_UpdateProjectCounts";
+    private const string InsertViewLogSql = "usp_Album_InsertViewLog";
+    private const string InsertShareLogSql = "usp_Album_InsertShareLog";
+    private const string IncrementViewCountSql = "usp_Album_IncrementViewCount";
+    private const string IncrementShareCountSql = "usp_Album_IncrementShareCount";
+    private const string GetLastInsertIdSql = "usp_Common_GetLastInsertId";
 
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
         ? throw new ArgumentException("Album database connection string is required.", nameof(connectionString))
@@ -386,7 +48,8 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var existingProjectId = await connection.ExecuteScalarAsync<long?>(
             new CommandDefinition(
                 FindProjectByShareCodeSql,
-                new { ShareCode = shareCode },
+                new { p_share_code = shareCode },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         return existingProjectId.HasValue;
@@ -402,8 +65,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var existingProjectId = await connection.ExecuteScalarAsync<long?>(
             new CommandDefinition(
                 FindProjectByShareCodeSql,
-                new { ShareCode = command.ShareCode },
+                new { p_share_code = command.ShareCode },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (existingProjectId.HasValue)
@@ -414,8 +78,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var spuId = await connection.ExecuteScalarAsync<long?>(
             new CommandDefinition(
                 FindProductIdSql,
-                new { ProductCode = command.ProductCode },
+                new { p_product_code = command.ProductCode },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (!spuId.HasValue)
@@ -430,21 +95,26 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 InsertProjectSql,
                 new
                 {
-                    command.UserId,
-                    command.BookType,
-                    command.Title,
-                    command.Subtitle,
-                    command.Status,
-                    SpuId = spuId.Value,
-                    command.ShareCode,
-                    IsPublic = command.IsPublic,
-                    SharedAt = sharedAt
+                    p_user_id = command.UserId,
+                    p_book_type = command.BookType,
+                    p_title = command.Title,
+                    p_subtitle = NormalizeNullable(command.Subtitle),
+                    p_status = command.Status,
+                    p_spu_id = spuId.Value,
+                    p_share_code = command.ShareCode,
+                    p_is_public = command.IsPublic,
+                    p_shared_at = sharedAt
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var projectId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetLastInsertIdSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         var snapshotData = BuildSnapshotData(command.SnapshotSchemaVersion, command.ShareCode, Array.Empty<SnapshotPageRow>());
 
@@ -453,27 +123,33 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 InsertVersionSql,
                 new
                 {
-                    ProjectId = projectId,
-                    command.VersionNo,
-                    SnapshotData = snapshotData,
-                    RenderVersion = NormalizeNullable(command.RenderVersion)
+                    p_project_id = projectId,
+                    p_version_no = command.VersionNo,
+                    p_snapshot_data = snapshotData,
+                    p_render_version = NormalizeNullable(command.RenderVersion)
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var versionId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetLastInsertIdSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 UpdateProjectSharedVersionSql,
                 new
                 {
-                    ProjectId = projectId,
-                    VersionId = versionId,
-                    SharedAt = sharedAt
+                    p_project_id = projectId,
+                    p_version_id = versionId,
+                    p_shared_at = sharedAt
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
@@ -502,8 +178,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var projectRow = await connection.QuerySingleOrDefaultAsync<ProjectWriteRow>(
             new CommandDefinition(
                 FindProjectForWriteSql,
-                new { ShareCode = shareCode },
+                new { p_share_code = shareCode },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (projectRow is null || !projectRow.SharedVersionId.HasValue)
@@ -535,8 +212,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             : (await connection.QueryAsync<FileReferenceRow>(
                 new CommandDefinition(
                     FindActiveFilesSql,
-                    new { FileIds = fileIds.ToArray() },
+                    new { p_file_ids = JoinCsv(fileIds) },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken)))
                 .ToDictionary(item => item.FileId);
 
@@ -555,15 +233,17 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         await connection.ExecuteAsync(
             new CommandDefinition(
                 DeleteVersionPageAssetsSql,
-                new { ProjectVersionId = projectRow.SharedVersionId.Value },
+                new { p_project_version_id = projectRow.SharedVersionId.Value },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 DeleteVersionPagesSql,
-                new { ProjectVersionId = projectRow.SharedVersionId.Value },
+                new { p_project_version_id = projectRow.SharedVersionId.Value },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         foreach (var page in command.Pages.OrderBy(item => item.SortOrder).ThenBy(item => item.PageNo))
@@ -576,30 +256,35 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                     InsertVersionPageSql,
                     new
                     {
-                        ProjectVersionId = projectRow.SharedVersionId.Value,
-                        page.PageNo,
-                        page.PageLabel,
-                        page.PageType,
-                        page.SortOrder,
-                        JsonSource = page.JsonSource,
-                        JsonFileId = (long?)null,
-                        JsonBucket = (string?)null,
-                        JsonObjectKey = (string?)null,
-                        HtmlFileId = htmlFile?.FileId,
-                        HtmlBucket = htmlFile?.Bucket,
-                        HtmlObjectKey = htmlFile?.ObjectKey,
-                        ThumbnailFileId = thumbnailFile?.FileId,
-                        ThumbnailBucket = thumbnailFile?.Bucket,
-                        ThumbnailObjectKey = thumbnailFile?.ObjectKey,
-                        page.PageWidth,
-                        page.PageHeight,
-                        page.SchemaVersion
+                        p_project_version_id = projectRow.SharedVersionId.Value,
+                        p_page_no = page.PageNo,
+                        p_page_label = page.PageLabel,
+                        p_page_type = page.PageType,
+                        p_sort_order = page.SortOrder,
+                        p_json_source = page.JsonSource,
+                        p_json_file_id = (long?)null,
+                        p_json_bucket = (string?)null,
+                        p_json_object_key = (string?)null,
+                        p_html_file_id = htmlFile?.FileId,
+                        p_html_bucket = htmlFile?.Bucket,
+                        p_html_object_key = htmlFile?.ObjectKey,
+                        p_thumbnail_file_id = thumbnailFile?.FileId,
+                        p_thumbnail_bucket = thumbnailFile?.Bucket,
+                        p_thumbnail_object_key = thumbnailFile?.ObjectKey,
+                        p_page_width = page.PageWidth,
+                        p_page_height = page.PageHeight,
+                        p_schema_version = page.SchemaVersion
                     },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             var versionPageId = await connection.ExecuteScalarAsync<long>(
-                new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+                new CommandDefinition(
+                    GetLastInsertIdSql,
+                    transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: cancellationToken));
 
             foreach (var image in page.Images.OrderBy(item => item.SortOrder))
             {
@@ -610,19 +295,20 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                         InsertVersionPageAssetSql,
                         new
                         {
-                            VersionPageId = versionPageId,
-                            image.SortOrder,
-                            image.Role,
-                            FileId = imageFile.FileId,
-                            BucketName = imageFile.Bucket,
-                            ObjectKey = imageFile.ObjectKey,
-                            image.Width,
-                            image.Height,
-                            AltText = NormalizeNullable(image.AltText),
-                            Caption = NormalizeNullable(image.Caption),
-                            CropJson = NormalizeNullable(image.CropJson)
+                            p_version_page_id = versionPageId,
+                            p_sort_order = image.SortOrder,
+                            p_role = image.Role,
+                            p_file_id = imageFile.FileId,
+                            p_bucket_name = imageFile.Bucket,
+                            p_object_key = imageFile.ObjectKey,
+                            p_width = image.Width,
+                            p_height = image.Height,
+                            p_alt_text = NormalizeNullable(image.AltText),
+                            p_caption = NormalizeNullable(image.Caption),
+                            p_crop_json = NormalizeNullable(image.CropJson)
                         },
                         transaction: transaction,
+                        commandType: CommandType.StoredProcedure,
                         cancellationToken: cancellationToken));
             }
         }
@@ -630,8 +316,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var stats = await connection.QuerySingleAsync<VersionStatsRow>(
             new CommandDefinition(
                 FindVersionStatsSql,
-                new { ProjectVersionId = projectRow.SharedVersionId.Value },
+                new { p_project_version_id = projectRow.SharedVersionId.Value },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var pageCount = checked((int)stats.PageCount);
@@ -640,8 +327,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var snapshotPages = (await connection.QueryAsync<SnapshotPageRow>(
             new CommandDefinition(
                 FindSnapshotPagesSql,
-                new { ProjectVersionId = projectRow.SharedVersionId.Value },
+                new { p_project_version_id = projectRow.SharedVersionId.Value },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken)))
             .ToArray();
 
@@ -652,12 +340,13 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 UpdateProjectVersionSnapshotSql,
                 new
                 {
-                    ProjectVersionId = projectRow.SharedVersionId.Value,
-                    PageCount = pageCount,
-                    ImageCount = imageCount,
-                    SnapshotData = snapshotData
+                    p_project_version_id = projectRow.SharedVersionId.Value,
+                    p_page_count = pageCount,
+                    p_image_count = imageCount,
+                    p_snapshot_data = snapshotData
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
@@ -665,11 +354,12 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 UpdateProjectCountsSql,
                 new
                 {
-                    ProjectId = projectRow.ProjectId,
-                    PageCount = pageCount,
-                    ImageCount = imageCount
+                    p_project_id = projectRow.ProjectId,
+                    p_page_count = pageCount,
+                    p_image_count = imageCount
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
@@ -691,7 +381,11 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var projectRow = await connection.QuerySingleOrDefaultAsync<ProjectRow>(
-            new CommandDefinition(FindProjectSql, new { ShareCode = shareCode }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                FindProjectSql,
+                new { p_share_code = shareCode },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         if (projectRow is null)
         {
@@ -701,7 +395,8 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var pageRows = (await connection.QueryAsync<PageSummaryRow>(
             new CommandDefinition(
                 FindPagesSql,
-                new { ProjectVersionId = projectRow.SharedVersionId },
+                new { p_project_version_id = projectRow.SharedVersionId },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken)))
             .ToArray();
 
@@ -733,7 +428,8 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var pageRow = await connection.QuerySingleOrDefaultAsync<PageRow>(
             new CommandDefinition(
                 FindPageSql,
-                new { ShareCode = shareCode, PageNo = pageNumber },
+                new { p_share_code = shareCode, p_page_no = pageNumber },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (pageRow is null)
@@ -744,7 +440,8 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var assetRows = (await connection.QueryAsync<PageAssetRow>(
             new CommandDefinition(
                 FindPageAssetsSql,
-                new { VersionPageId = pageRow.VersionPageId },
+                new { p_version_page_id = pageRow.VersionPageId },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken)))
             .ToArray();
 
@@ -776,8 +473,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var projectId = await connection.ExecuteScalarAsync<long?>(
             new CommandDefinition(
                 FindProjectForMutationSql,
-                new { ShareCode = shareCode },
+                new { p_share_code = shareCode },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (!projectId.HasValue)
@@ -791,20 +489,22 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 InsertViewLogSql,
                 new
                 {
-                    ProjectId = projectId.Value,
-                    ShareCode = shareCode,
-                    PageNo = pageNumber,
-                    ClientIp = NormalizeNullable(clientIp),
-                    ClientUserAgent = NormalizeNullable(clientUserAgent)
+                    p_project_id = projectId.Value,
+                    p_share_code = shareCode,
+                    p_page_no = pageNumber,
+                    p_client_ip = NormalizeNullable(clientIp),
+                    p_client_user_agent = NormalizeNullable(clientUserAgent)
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 IncrementViewCountSql,
-                new { ProjectId = projectId.Value },
+                new { p_project_id = projectId.Value },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
@@ -824,8 +524,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var projectId = await connection.ExecuteScalarAsync<long?>(
             new CommandDefinition(
                 FindProjectForMutationSql,
-                new { ShareCode = shareCode },
+                new { p_share_code = shareCode },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (!projectId.HasValue)
@@ -839,20 +540,22 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 InsertShareLogSql,
                 new
                 {
-                    ProjectId = projectId.Value,
-                    ShareCode = shareCode,
-                    Channel = channel,
-                    ClientIp = NormalizeNullable(clientIp),
-                    ClientUserAgent = NormalizeNullable(clientUserAgent)
+                    p_project_id = projectId.Value,
+                    p_share_code = shareCode,
+                    p_channel = channel,
+                    p_client_ip = NormalizeNullable(clientIp),
+                    p_client_user_agent = NormalizeNullable(clientUserAgent)
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 IncrementShareCountSql,
-                new { ProjectId = projectId.Value },
+                new { p_project_id = projectId.Value },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
@@ -864,6 +567,11 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         return connection;
+    }
+
+    private static string JoinCsv(IEnumerable<long> values)
+    {
+        return string.Join(',', values);
     }
 
     private static AlbumPreviewPageSummaryModel MapPageSummary(PageSummaryRow row)

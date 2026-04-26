@@ -25,6 +25,21 @@ public sealed record AlbumTemplateCreateCommandModel(
 	bool IsActive,
 	int SortOrder);
 
+public sealed record AlbumTemplateUpdateCommandModel(
+	string Name,
+	string? Description,
+	string? BookType,
+	string PageType,
+	string? Category,
+	string? ThemeCode,
+	string SchemaVersion,
+	string JsonSource,
+	long? PreviewFileId,
+	long? CreatedByUserId,
+	bool IsBuiltIn,
+	bool IsActive,
+	int SortOrder);
+
 public sealed record AlbumTemplateCreateResultModel(
 	long TemplateId,
 	string TemplateCode,

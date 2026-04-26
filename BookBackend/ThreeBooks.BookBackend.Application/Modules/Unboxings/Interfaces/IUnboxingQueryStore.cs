@@ -4,6 +4,18 @@ namespace ThreeBooks.BookBackend.Application.Modules.Unboxings.Interfaces;
 
 public interface IUnboxingQueryStore
 {
+    Task<AdminUnboxingListQueryResultModel> GetAdminListAsync(
+        AdminUnboxingListFilter filter,
+        CancellationToken cancellationToken);
+
+    Task<AdminUnboxingDetailQueryModel?> GetAdminDetailAsync(
+        string postNo,
+        CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(
+        string postNo,
+        CancellationToken cancellationToken);
+
     Task<bool> UserExistsAsync(
         long userId,
         CancellationToken cancellationToken);

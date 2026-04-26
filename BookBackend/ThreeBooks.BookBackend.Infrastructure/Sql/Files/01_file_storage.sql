@@ -42,11 +42,30 @@ CREATE TABLE IF NOT EXISTS storage_file_operation_log (
         FOREIGN KEY (file_id) REFERENCES storage_file_object (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件对象操作日志';
 
+DROP PROCEDURE IF EXISTS usp_FileObject_GetMetadata;
 DROP PROCEDURE IF EXISTS usp_FileObject_SaveUpload;
 DROP PROCEDURE IF EXISTS usp_FileObject_RecordAccess;
 DROP PROCEDURE IF EXISTS usp_FileObject_MarkDeleted;
 
 DELIMITER $$
+
+CREATE PROCEDURE usp_FileObject_GetMetadata(
+    IN p_bucket_name VARCHAR(128),
+    IN p_object_key VARCHAR(512)
+)
+BEGIN
+    SELECT
+        original_file_name AS OriginalFileName,
+        file_name AS FileName,
+        file_extension AS FileExtension,
+        content_type AS ContentType,
+        content_length AS ContentLength
+    FROM storage_file_object
+    WHERE BINARY bucket_name = BINARY p_bucket_name
+      AND BINARY object_key = BINARY p_object_key
+      AND storage_status = 1
+    LIMIT 1;
+END $$
 
 CREATE PROCEDURE usp_FileObject_SaveUpload(
     IN p_bucket_name VARCHAR(128),

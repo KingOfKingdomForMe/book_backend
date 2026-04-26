@@ -6,6 +6,14 @@ public sealed record UnboxingListFilter(
     int PageNumber,
     int PageSize);
 
+public sealed record AdminUnboxingListFilter(
+    string? Keyword,
+    string? LevelCode,
+    bool? IsFeatured,
+    int? Status,
+    int PageNumber,
+    int PageSize);
+
 public sealed record UnboxingLevelModel(
     string LevelCode,
     string LevelName,
@@ -103,5 +111,47 @@ public sealed record UnboxingDetailQueryModel(
     UnboxingLevelModel? Level,
     bool IsFeatured,
     DateTime PublishedAtUtc,
+    IReadOnlyCollection<string> Tags,
+    IReadOnlyCollection<UnboxingMediaModel> Media);
+
+public sealed record AdminUnboxingListItemQueryModel(
+    long PostId,
+    string PostNo,
+    long UserId,
+    string? AuthorName,
+    string? AuthorAvatarUrl,
+    string? Title,
+    string? BookTitle,
+    string? ProductLabel,
+    int Status,
+    UnboxingLevelModel? Level,
+    string? CoverImageUrl,
+    string? CoverThumbnailUrl,
+    bool IsFeatured,
+    DateTime? PublishedAtUtc,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc,
+    IReadOnlyCollection<string> Tags);
+
+public sealed record AdminUnboxingListQueryResultModel(
+    IReadOnlyCollection<AdminUnboxingListItemQueryModel> Items,
+    int TotalCount);
+
+public sealed record AdminUnboxingDetailQueryModel(
+    long PostId,
+    string PostNo,
+    long UserId,
+    string? AuthorName,
+    string? AuthorAvatarUrl,
+    string? Title,
+    string? BookTitle,
+    string? ContentText,
+    string? ProductLabel,
+    int Status,
+    UnboxingLevelModel? Level,
+    bool IsFeatured,
+    DateTime? PublishedAtUtc,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc,
     IReadOnlyCollection<string> Tags,
     IReadOnlyCollection<UnboxingMediaModel> Media);

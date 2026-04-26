@@ -25,6 +25,49 @@ public sealed class UnboxingService(IUnboxingQueryStore queryStore) : IUnboxingS
     private static readonly Regex PostNoPattern = new("^[A-Za-z0-9_-]{1,32}$", RegexOptions.Compiled);
     private static readonly Regex MediaTypePattern = new("^(image|video)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    public async Task<PagedResult<AdminUnboxingListItemResponse>> GetAdminListAsync(
+        AdminListUnboxingsRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var filter = new AdminUnboxingListFilter(
+            NormalizeOptionalText(request.Keyword, 128),
+            NormalizeOptionalCode(request.LevelCode, nameof(request.LevelCode)),
+            request.IsFeatured,
+            NormalizeAdminStatus(request.Status),
+            NormalizePageNumber(request.PageNumber),
+            NormalizePageSize(request.PageSize));
+
+        var result = await queryStore.GetAdminListAsync(filter, cancellationToken);
+
+        return new PagedResult<AdminUnboxingListItemResponse>(
+            result.Items.Select(MapAdminListItem).ToArray(),
+            filter.PageNumber,
+            filter.PageSize,
+            result.TotalCount);
+    }
+
+    public async Task<AdminUnboxingDetailResponse?> GetAdminDetailAsync(
+        string postNo,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        var normalizedPostNo = NormalizePostNo(postNo);
+        var detail = await queryStore.GetAdminDetailAsync(normalizedPostNo, cancellationToken);
+        return detail is null ? null : MapAdminDetail(detail);
+    }
+
+    public async Task<bool> DeleteAsync(
+        string postNo,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        var normalizedPostNo = NormalizePostNo(postNo);
+        return await queryStore.DeleteAsync(normalizedPostNo, cancellationToken);
+    }
+
     public async Task<SaveUnboxingResponse> CreateAsync(
         CreateUnboxingRequest request,
         RequestContext context,
@@ -181,6 +224,56 @@ public sealed class UnboxingService(IUnboxingQueryStore queryStore) : IUnboxingS
                 media.Height)).ToArray());
     }
 
+    private static AdminUnboxingListItemResponse MapAdminListItem(AdminUnboxingListItemQueryModel item)
+    {
+        return new AdminUnboxingListItemResponse(
+            item.PostId,
+            item.PostNo,
+            item.UserId,
+            ResolveAuthorName(item.AuthorName),
+            item.AuthorAvatarUrl,
+            item.Title,
+            item.BookTitle,
+            item.ProductLabel,
+            item.Status,
+            item.Level is null ? null : MapLevel(item.Level),
+            item.IsFeatured,
+            item.CoverImageUrl,
+            item.CoverThumbnailUrl,
+            item.PublishedAtUtc,
+            item.CreatedAtUtc,
+            item.UpdatedAtUtc,
+            item.Tags);
+    }
+
+    private static AdminUnboxingDetailResponse MapAdminDetail(AdminUnboxingDetailQueryModel item)
+    {
+        return new AdminUnboxingDetailResponse(
+            item.PostId,
+            item.PostNo,
+            item.UserId,
+            ResolveAuthorName(item.AuthorName),
+            item.AuthorAvatarUrl,
+            item.Title,
+            item.BookTitle,
+            item.ContentText,
+            item.ProductLabel,
+            item.Status,
+            item.Level is null ? null : MapLevel(item.Level),
+            item.IsFeatured,
+            item.PublishedAtUtc,
+            item.CreatedAtUtc,
+            item.UpdatedAtUtc,
+            item.Tags,
+            item.Media.Select(media => new UnboxingMediaResponse(
+                media.MediaType,
+                media.StorageUrl,
+                media.ThumbnailUrl,
+                media.SortOrder,
+                media.Width,
+                media.Height)).ToArray());
+    }
+
     private static UnboxingLevelResponse MapLevel(UnboxingLevelModel level)
     {
         return new UnboxingLevelResponse(level.LevelCode, level.LevelName, level.IconUrl);
@@ -311,6 +404,16 @@ public sealed class UnboxingService(IUnboxingQueryStore queryStore) : IUnboxingS
         return status is >= 0 and <= 3
             ? status
             : throw new ArgumentException("Status must be between 0 and 3.", nameof(status));
+    }
+
+    private static int? NormalizeAdminStatus(int? status)
+    {
+        if (!status.HasValue)
+        {
+            return null;
+        }
+
+        return NormalizeStatus(status.Value);
     }
 
     private static DateTime? NormalizePublishedAtUtc(DateTime? publishedAtUtc, int status)

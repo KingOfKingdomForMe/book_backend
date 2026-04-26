@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Cryptography;
 using Dapper;
 using MySqlConnector;
@@ -8,495 +9,178 @@ namespace ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Orders;
 
 public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
 {
-    private const string FindUserSql = """
-        SELECT id
-        FROM identity_user
-        WHERE id = @UserId
-        LIMIT 1;
-        """;
-
-    private const string ListShippingAddressesSql = """
-        SELECT
-            id AS AddressId,
-            receiver_name AS ReceiverName,
-            phone AS Phone,
-            province AS Province,
-            city AS City,
-            district AS District,
-            address_detail AS AddressDetail,
-            postal_code AS PostalCode,
-            is_default AS IsDefault
-        FROM order_shipping_address
-        WHERE user_id = @UserId
-        ORDER BY is_default DESC, updated_at DESC, id DESC;
-        """;
-
-    private const string FindShippingAddressSql = """
-        SELECT
-            id AS AddressId,
-            user_id AS UserId,
-            receiver_name AS ReceiverName,
-            phone AS Phone,
-            province AS Province,
-            city AS City,
-            district AS District,
-            address_detail AS AddressDetail,
-            postal_code AS PostalCode,
-            is_default AS IsDefault
-        FROM order_shipping_address
-        WHERE id = @AddressId
-          AND user_id = @UserId
-        LIMIT 1;
-        """;
-
-    private const string CountOtherAddressesSql = """
-        SELECT COUNT(*)
-        FROM order_shipping_address
-        WHERE user_id = @UserId
-          AND (@AddressId IS NULL OR id <> @AddressId);
-        """;
-
-    private const string CountOtherDefaultAddressesSql = """
-        SELECT COUNT(*)
-        FROM order_shipping_address
-        WHERE user_id = @UserId
-          AND is_default = 1
-          AND (@AddressId IS NULL OR id <> @AddressId);
-        """;
-
-    private const string ClearDefaultShippingAddressesSql = """
-        UPDATE order_shipping_address
-        SET is_default = 0,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = @UserId
-          AND (@AddressId IS NULL OR id <> @AddressId);
-        """;
-
-    private const string InsertShippingAddressSql = """
-        INSERT INTO order_shipping_address (
-            user_id,
-            receiver_name,
-            phone,
-            province,
-            city,
-            district,
-            address_detail,
-            postal_code,
-            is_default)
-        VALUES (
-            @UserId,
-            @ReceiverName,
-            @Phone,
-            @Province,
-            @City,
-            @District,
-            @AddressDetail,
-            @PostalCode,
-            @IsDefault);
-        """;
-
-    private const string UpdateShippingAddressSql = """
-        UPDATE order_shipping_address
-        SET receiver_name = @ReceiverName,
-            phone = @Phone,
-            province = @Province,
-            city = @City,
-            district = @District,
-            address_detail = @AddressDetail,
-            postal_code = @PostalCode,
-            is_default = @IsDefault,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = @AddressId
-          AND user_id = @UserId;
-        """;
-
-    private const string FindProjectForOrderSql = """
-        SELECT
-            p.id AS ProjectId,
-            p.user_id AS UserId,
-            p.title AS ProjectTitle,
-            p.subtitle AS ProjectSubtitle,
-            p.status AS ProjectStatus,
-            p.page_count AS ProjectPageCount,
-            p.image_count AS ProjectImageCount,
-            p.book_type AS BookType,
-            p.spu_id AS SpuId,
-            COALESCE(spu.spu_code, p.book_type) AS ProductCode,
-            latest_version.id AS ProjectVersionId,
-            COALESCE(latest_version.page_count, p.page_count) AS VersionPageCount,
-            COALESCE(latest_version.image_count, p.image_count) AS VersionImageCount,
-            cover.cover_text AS CoverText,
-            cover.cover_source AS CoverSource,
-            layout.size_code AS SizeCode,
-            layout.binding_code AS BindingCode,
-            layout.layout_code AS LayoutCode
-        FROM book_project p
-        LEFT JOIN catalog_product_spu spu ON spu.id = p.spu_id
-        LEFT JOIN book_project_cover cover ON cover.project_id = p.id
-        LEFT JOIN book_project_layout layout ON layout.project_id = p.id
-        LEFT JOIN book_project_version latest_version ON latest_version.id = (
-            SELECT version.id
-            FROM book_project_version version
-            WHERE version.project_id = p.id
-            ORDER BY version.version_no DESC, version.id DESC
-            LIMIT 1
-        )
-        WHERE p.id = @ProjectId
-          AND p.user_id = @UserId
-        LIMIT 1;
-        """;
-
-    private const string FindSkuForOrderSql = """
-        SELECT
-            sku.id AS SkuId,
-            sku.spu_id AS SpuId,
-            sku.sku_code AS SkuCode,
-            sku.min_pages AS MinPages,
-            sku.max_pages AS MaxPages,
-            spu.spu_code AS SpuCode,
-            spu.name AS SpuName,
-            size_value.value_label AS SizeLabel,
-            binding_value.value_label AS BindingLabel,
-            layout_value.value_label AS LayoutLabel,
-            price.id AS PriceRuleId,
-            COALESCE(price.base_price, 0) AS BasePrice,
-            COALESCE(price.page_unit_price, 0) AS PageUnitPrice
-        FROM catalog_product_sku sku
-        INNER JOIN catalog_product_spu spu ON spu.id = sku.spu_id AND spu.is_active = 1
-        LEFT JOIN catalog_spec_value size_value ON size_value.id = sku.size_value_id
-        LEFT JOIN catalog_spec_value binding_value ON binding_value.id = sku.binding_value_id
-        LEFT JOIN catalog_spec_value layout_value ON layout_value.id = sku.layout_value_id
-        LEFT JOIN catalog_price_rule price ON price.id = (
-            SELECT pr.id
-            FROM catalog_price_rule pr
-            WHERE pr.sku_id = sku.id
-              AND pr.is_active = 1
-              AND pr.effective_from <= UTC_TIMESTAMP()
-              AND (pr.effective_to IS NULL OR pr.effective_to > UTC_TIMESTAMP())
-            ORDER BY pr.effective_from DESC, pr.id DESC
-            LIMIT 1
-        )
-        WHERE sku.id = @SkuId
-          AND sku.is_active = 1
-        LIMIT 1;
-        """;
-
-    private const string InsertOrderSql = """
-        INSERT INTO order_order (
-            order_no,
-            user_id,
-            order_type,
-            status,
-            item_count,
-            total_amount,
-            discount_amount,
-            freight_amount,
-            pay_amount,
-            ship_receiver,
-            ship_phone,
-            ship_province,
-            ship_city,
-            ship_district,
-            ship_address,
-            ship_postal,
-            agent_account_id,
-            agent_share_link_id,
-            bundle_id,
-            remark,
-            estimated_ship_date,
-            paid_at,
-            closed_at)
-        VALUES (
-            @OrderNo,
-            @UserId,
-            'normal',
-            @Status,
-            1,
-            @TotalAmount,
-            @DiscountAmount,
-            @FreightAmount,
-            @PayAmount,
-            @ShipReceiver,
-            @ShipPhone,
-            @ShipProvince,
-            @ShipCity,
-            @ShipDistrict,
-            @ShipAddress,
-            @ShipPostal,
-            NULL,
-            NULL,
-            NULL,
-            @Remark,
-            @EstimatedShipDate,
-            @PaidAt,
-            NULL);
-        """;
-
-    private const string InsertOrderItemSql = """
-        INSERT INTO order_order_item (
-            order_id,
-            item_no,
-            project_id,
-            project_version_id,
-            sku_id,
-            price_snapshot_id,
-            quantity,
-            unit_price,
-            subtotal,
-            status)
-        VALUES (
-            @OrderId,
-            1,
-            @ProjectId,
-            @ProjectVersionId,
-            @SkuId,
-            NULL,
-            @Quantity,
-            @UnitPrice,
-            @Subtotal,
-            0);
-        """;
-
-    private const string InsertPriceSnapshotSql = """
-        INSERT INTO order_price_snapshot (
-            order_item_id,
-            spu_code,
-            spu_name,
-            sku_code,
-            size_label,
-            binding_label,
-            layout_label,
-            cover_desc,
-            page_count,
-            image_count,
-            base_price,
-            page_unit_price,
-            calculated_price,
-            agent_markup,
-            discount,
-            final_price,
-            is_bundle_item,
-            bundle_code,
-            bundle_name,
-            estimated_ship_date,
-            created_at)
-        VALUES (
-            @OrderItemId,
-            @SpuCode,
-            @SpuName,
-            @SkuCode,
-            @SizeLabel,
-            @BindingLabel,
-            @LayoutLabel,
-            @CoverDescription,
-            @PageCount,
-            @ImageCount,
-            @BasePrice,
-            @PageUnitPrice,
-            @CalculatedPrice,
-            0,
-            @Discount,
-            @FinalPrice,
-            0,
-            NULL,
-            NULL,
-            @EstimatedShipDate,
-            UTC_TIMESTAMP());
-        """;
-
-    private const string UpdateOrderItemSnapshotSql = """
-        UPDATE order_order_item
-        SET price_snapshot_id = @PriceSnapshotId,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = @OrderItemId;
-        """;
-
-    private const string InsertPaymentSql = """
-        INSERT INTO order_payment (
-            payment_no,
-            order_id,
-            user_id,
-            pay_channel,
-            pay_amount,
-            status,
-            paid_at,
-            expired_at)
-        VALUES (
-            @PaymentNo,
-            @OrderId,
-            @UserId,
-            @PayChannel,
-            @PayAmount,
-            @Status,
-            @PaidAt,
-            @ExpiredAt);
-        """;
-
-    private const string UpdateProjectStatusSql = """
-        UPDATE book_project
-        SET status = 3,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = @ProjectId
-          AND status < 3;
-        """;
-
-    private const string CountOrdersSql = """
-        SELECT COUNT(*)
-        FROM order_order
-        WHERE user_id = @UserId
-          AND (@Status IS NULL OR status = @Status);
-        """;
-
-    private const string ListOrdersSql = """
-        SELECT
-            o.id AS OrderId,
-            o.order_no AS OrderNo,
-            o.status AS Status,
-            o.item_count AS ItemCount,
-            o.total_amount AS TotalAmount,
-            o.pay_amount AS PayAmount,
-            COALESCE(project.title, snapshot.spu_name) AS ProjectTitle,
-            COALESCE(snapshot.spu_name, '') AS ProductName,
-            COALESCE(snapshot.sku_code, '') AS SkuCode,
-            COALESCE(first_item.quantity, 0) AS Quantity,
-            o.created_at AS CreatedAt,
-            o.paid_at AS PaidAt,
-            latest_shipment.shipment_no AS ShipmentNo,
-            latest_shipment.status AS ShipmentStatus
-        FROM order_order o
-        LEFT JOIN order_order_item first_item ON first_item.id = (
-            SELECT item.id
-            FROM order_order_item item
-            WHERE item.order_id = o.id
-            ORDER BY item.item_no, item.id
-            LIMIT 1
-        )
-        LEFT JOIN book_project project ON project.id = first_item.project_id
-        LEFT JOIN order_price_snapshot snapshot ON snapshot.order_item_id = first_item.id
-        LEFT JOIN order_shipment latest_shipment ON latest_shipment.id = (
-            SELECT shipment.id
-            FROM order_shipment shipment
-            WHERE shipment.order_id = o.id
-            ORDER BY shipment.id DESC
-            LIMIT 1
-        )
-        WHERE o.user_id = @UserId
-          AND (@Status IS NULL OR o.status = @Status)
-        ORDER BY o.created_at DESC, o.id DESC
-        LIMIT @PageSize OFFSET @Offset;
-        """;
-
-    private const string FindOrderHeaderSql = """
-        SELECT
-            o.id AS OrderId,
-            o.order_no AS OrderNo,
-            o.user_id AS UserId,
-            o.order_type AS OrderType,
-            o.status AS Status,
-            o.item_count AS ItemCount,
-            o.total_amount AS TotalAmount,
-            o.discount_amount AS DiscountAmount,
-            o.freight_amount AS FreightAmount,
-            o.pay_amount AS PayAmount,
-            o.ship_receiver AS ReceiverName,
-            o.ship_phone AS Phone,
-            o.ship_province AS Province,
-            o.ship_city AS City,
-            o.ship_district AS District,
-            o.ship_address AS Address,
-            o.ship_postal AS PostalCode,
-            o.remark AS Remark,
-            o.created_at AS CreatedAt,
-            o.paid_at AS PaidAt,
-            o.closed_at AS ClosedAt,
-            latest_payment.id AS PaymentId,
-            latest_payment.payment_no AS PaymentNo,
-            latest_payment.pay_channel AS PayChannel,
-            latest_payment.pay_amount AS PaymentAmount,
-            latest_payment.status AS PaymentStatus,
-            latest_payment.paid_at AS PaymentPaidAt,
-            latest_payment.expired_at AS PaymentExpiredAt,
-            latest_shipment.id AS ShipmentId,
-            latest_shipment.shipment_no AS ShipmentNo,
-            latest_shipment.carrier_code AS CarrierCode,
-            latest_shipment.carrier_name AS CarrierName,
-            latest_shipment.status AS ShipmentStatus,
-            latest_shipment.shipped_at AS ShippedAt,
-            latest_shipment.delivered_at AS DeliveredAt
-        FROM order_order o
-        LEFT JOIN order_payment latest_payment ON latest_payment.id = (
-            SELECT payment.id
-            FROM order_payment payment
-            WHERE payment.order_id = o.id
-            ORDER BY payment.id DESC
-            LIMIT 1
-        )
-        LEFT JOIN order_shipment latest_shipment ON latest_shipment.id = (
-            SELECT shipment.id
-            FROM order_shipment shipment
-            WHERE shipment.order_id = o.id
-            ORDER BY shipment.id DESC
-            LIMIT 1
-        )
-        WHERE o.user_id = @UserId
-          AND o.order_no = @OrderNo
-        LIMIT 1;
-        """;
-
-    private const string FindOrderItemsSql = """
-        SELECT
-            item.item_no AS ItemNo,
-            item.project_id AS ProjectId,
-            item.project_version_id AS ProjectVersionId,
-            item.sku_id AS SkuId,
-            item.quantity AS Quantity,
-            item.unit_price AS UnitPrice,
-            item.subtotal AS Subtotal,
-            item.status AS Status,
-            project.title AS ProjectTitle,
-            snapshot.spu_code AS SpuCode,
-            snapshot.spu_name AS SpuName,
-            snapshot.sku_code AS SnapshotSkuCode,
-            snapshot.size_label AS SizeLabel,
-            snapshot.binding_label AS BindingLabel,
-            snapshot.layout_label AS LayoutLabel,
-            snapshot.cover_desc AS CoverDescription,
-            snapshot.page_count AS PageCount,
-            snapshot.image_count AS ImageCount,
-            snapshot.base_price AS BasePrice,
-            snapshot.page_unit_price AS PageUnitPrice,
-            snapshot.calculated_price AS CalculatedPrice,
-            snapshot.agent_markup AS AgentMarkup,
-            snapshot.discount AS Discount,
-            snapshot.final_price AS FinalPrice,
-            snapshot.is_bundle_item AS IsBundleItem,
-            snapshot.bundle_code AS BundleCode,
-            snapshot.bundle_name AS BundleName,
-            snapshot.estimated_ship_date AS EstimatedShipDate
-        FROM order_order_item item
-        LEFT JOIN book_project project ON project.id = item.project_id
-        LEFT JOIN order_price_snapshot snapshot ON snapshot.order_item_id = item.id
-        WHERE item.order_id = @OrderId
-        ORDER BY item.item_no, item.id;
-        """;
-
-    private const string FindShipmentEventsSql = """
-        SELECT
-            event_time AS EventTime,
-            event_desc AS EventDescription,
-            location AS Location
-        FROM order_shipment_event
-        WHERE shipment_id = @ShipmentId
-        ORDER BY event_time DESC, id DESC;
-        """;
-
-    private const string GetLastInsertIdSql = """
-        SELECT LAST_INSERT_ID();
-        """;
+    private const string FindUserSql = "usp_Order_FindUser";
+    private const string ListShippingAddressesSql = "usp_Order_ListShippingAddresses";
+    private const string FindShippingAddressSql = "usp_Order_FindShippingAddress";
+    private const string CountOtherAddressesSql = "usp_Order_CountOtherAddresses";
+    private const string CountOtherDefaultAddressesSql = "usp_Order_CountOtherDefaultAddresses";
+    private const string ClearDefaultShippingAddressesSql = "usp_Order_ClearDefaultShippingAddresses";
+    private const string InsertShippingAddressSql = "usp_Order_InsertShippingAddress";
+    private const string UpdateShippingAddressSql = "usp_Order_UpdateShippingAddress";
+    private const string FindProjectForOrderSql = "usp_Order_FindProjectForOrder";
+    private const string FindSkuForOrderSql = "usp_Order_FindSkuForOrder";
+    private const string InsertOrderSql = "usp_Order_InsertOrder";
+    private const string InsertOrderItemSql = "usp_Order_InsertOrderItem";
+    private const string InsertPriceSnapshotSql = "usp_Order_InsertPriceSnapshot";
+    private const string UpdateOrderItemSnapshotSql = "usp_Order_UpdateOrderItemSnapshot";
+    private const string InsertPaymentSql = "usp_Order_InsertPayment";
+    private const string UpdateProjectStatusSql = "usp_Order_UpdateProjectStatus";
+    private const string CountOrdersSql = "usp_Order_CountOrders";
+    private const string ListOrdersSql = "usp_Order_ListOrders";
+    private const string FindOrderHeaderSql = "usp_Order_FindOrderHeader";
+    private const string FindOrderItemsSql = "usp_Order_FindOrderItems";
+    private const string FindShipmentEventsSql = "usp_Order_FindShipmentEvents";
+    private const string UpdateAdminOrderSql = "usp_Order_UpdateAdminOrder";
+    private const string InsertShipmentSql = "usp_Order_InsertShipment";
+    private const string UpdateShipmentSql = "usp_Order_UpdateShipment";
+    private const string InsertShipmentEventSql = "usp_Order_InsertShipmentEvent";
+    private const string GetLastInsertIdSql = "usp_Common_GetLastInsertId";
 
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
         ? throw new ArgumentException("Order database connection string is required.", nameof(connectionString))
         : connectionString;
+
+    public Task<OrderListQueryResultModel> GetAdminOrdersAsync(
+        AdminOrderListFilter filter,
+        CancellationToken cancellationToken)
+    {
+        return GetOrdersCoreAsync(
+            filter.UserId,
+            filter.Keyword,
+            filter.Status,
+            filter.PageNumber,
+            filter.PageSize,
+            cancellationToken);
+    }
+
+    public Task<OrderDetailQueryModel?> GetAdminOrderDetailAsync(
+        string orderNo,
+        CancellationToken cancellationToken)
+    {
+        return GetOrderDetailCoreAsync(null, orderNo, cancellationToken);
+    }
+
+    public async Task<bool> UpdateAdminOrderAsync(
+        string orderNo,
+        AdminOrderUpdateCommandModel command,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var header = await connection.QuerySingleOrDefaultAsync<OrderHeaderRow>(
+            new CommandDefinition(
+                FindOrderHeaderSql,
+                new { p_user_id = (long?)null, p_order_no = orderNo },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        if (header is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                UpdateAdminOrderSql,
+                new
+                {
+                    p_order_id = header.OrderId,
+                    p_status = command.Status,
+                    p_remark = NormalizeNullable(command.Remark),
+                    p_paid_at = command.PaidAtUtc,
+                    p_closed_at = command.ClosedAtUtc
+                },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        if (!string.IsNullOrWhiteSpace(command.ShipmentNo) && !string.IsNullOrWhiteSpace(command.CarrierCode))
+        {
+            var shipmentParameters = new
+            {
+                p_order_id = header.OrderId,
+                p_shipment_id = header.ShipmentId,
+                p_shipment_no = command.ShipmentNo,
+                p_carrier_code = command.CarrierCode,
+                p_carrier_name = NormalizeNullable(command.CarrierName),
+                p_status = command.ShipmentStatus ?? 0,
+                p_shipped_at = command.ShippedAtUtc,
+                p_delivered_at = command.DeliveredAtUtc
+            };
+
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    header.ShipmentId.HasValue ? UpdateShipmentSql : InsertShipmentSql,
+                    shipmentParameters,
+                    transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: cancellationToken));
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> AddAdminShipmentEventAsync(
+        string orderNo,
+        OrderShipmentEventCreateCommandModel command,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var header = await connection.QuerySingleOrDefaultAsync<OrderHeaderRow>(
+            new CommandDefinition(
+                FindOrderHeaderSql,
+                new { p_user_id = (long?)null, p_order_no = orderNo },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        if (header is null || !header.ShipmentId.HasValue || string.IsNullOrWhiteSpace(header.ShipmentNo) || string.IsNullOrWhiteSpace(header.CarrierCode))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                InsertShipmentEventSql,
+                new
+                {
+                    p_shipment_id = header.ShipmentId.Value,
+                    p_event_time = command.EventTimeUtc,
+                    p_event_desc = command.EventDescription,
+                    p_location = NormalizeNullable(command.Location)
+                },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                UpdateShipmentSql,
+                new
+                {
+                    p_order_id = header.OrderId,
+                    p_shipment_id = header.ShipmentId.Value,
+                    p_shipment_no = header.ShipmentNo,
+                    p_carrier_code = header.CarrierCode,
+                    p_carrier_name = NormalizeNullable(header.CarrierName),
+                    p_status = command.ShipmentStatus,
+                    p_shipped_at = command.ShippedAtUtc,
+                    p_delivered_at = command.DeliveredAtUtc
+                },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
 
     public async Task<IReadOnlyCollection<ShippingAddressQueryModel>> GetShippingAddressesAsync(
         long userId,
@@ -505,7 +189,11 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var rows = await connection.QueryAsync<ShippingAddressRow>(
-            new CommandDefinition(ListShippingAddressesSql, new { UserId = userId }, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                ListShippingAddressesSql,
+                new { p_user_id = userId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         return rows.Select(MapShippingAddress).ToArray();
     }
@@ -520,8 +208,9 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var userId = await connection.ExecuteScalarAsync<long?>(
             new CommandDefinition(
                 FindUserSql,
-                new { command.UserId },
+                new { p_user_id = command.UserId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (!userId.HasValue)
@@ -535,8 +224,9 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
             existing = await connection.QuerySingleOrDefaultAsync<ShippingAddressRow>(
                 new CommandDefinition(
                     FindShippingAddressSql,
-                    new { AddressId = command.AddressId.Value, command.UserId },
+                    new { p_address_id = command.AddressId.Value, p_user_id = command.UserId },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             if (existing is null)
@@ -548,15 +238,17 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var otherAddressCount = await connection.ExecuteScalarAsync<int>(
             new CommandDefinition(
                 CountOtherAddressesSql,
-                new { command.UserId, command.AddressId },
+                new { p_user_id = command.UserId, p_address_id = command.AddressId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var otherDefaultCount = await connection.ExecuteScalarAsync<int>(
             new CommandDefinition(
                 CountOtherDefaultAddressesSql,
-                new { command.UserId, command.AddressId },
+                new { p_user_id = command.UserId, p_address_id = command.AddressId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var shouldSetDefault = command.IsDefault
@@ -568,8 +260,9 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
             await connection.ExecuteAsync(
                 new CommandDefinition(
                     ClearDefaultShippingAddressesSql,
-                    new { command.UserId, command.AddressId },
+                    new { p_user_id = command.UserId, p_address_id = command.AddressId },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
         }
 
@@ -581,21 +274,26 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
                     InsertShippingAddressSql,
                     new
                     {
-                        command.UserId,
-                        command.ReceiverName,
-                        command.Phone,
-                        command.Province,
-                        command.City,
-                        District = NormalizeNullable(command.District),
-                        command.AddressDetail,
-                        PostalCode = NormalizeNullable(command.PostalCode),
-                        IsDefault = shouldSetDefault
+                        p_user_id = command.UserId,
+                        p_receiver_name = command.ReceiverName,
+                        p_phone = command.Phone,
+                        p_province = command.Province,
+                        p_city = command.City,
+                        p_district = NormalizeNullable(command.District),
+                        p_address_detail = command.AddressDetail,
+                        p_postal_code = NormalizeNullable(command.PostalCode),
+                        p_is_default = shouldSetDefault
                     },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             addressId = await connection.ExecuteScalarAsync<long>(
-                new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+                new CommandDefinition(
+                    GetLastInsertIdSql,
+                    transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
+                    cancellationToken: cancellationToken));
         }
         else
         {
@@ -604,18 +302,19 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
                     UpdateShippingAddressSql,
                     new
                     {
-                        AddressId = existing.AddressId,
-                        command.UserId,
-                        command.ReceiverName,
-                        command.Phone,
-                        command.Province,
-                        command.City,
-                        District = NormalizeNullable(command.District),
-                        command.AddressDetail,
-                        PostalCode = NormalizeNullable(command.PostalCode),
-                        IsDefault = shouldSetDefault
+                        p_address_id = existing.AddressId,
+                        p_user_id = command.UserId,
+                        p_receiver_name = command.ReceiverName,
+                        p_phone = command.Phone,
+                        p_province = command.Province,
+                        p_city = command.City,
+                        p_district = NormalizeNullable(command.District),
+                        p_address_detail = command.AddressDetail,
+                        p_postal_code = NormalizeNullable(command.PostalCode),
+                        p_is_default = shouldSetDefault
                     },
                     transaction: transaction,
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             addressId = existing.AddressId;
@@ -624,8 +323,9 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var saved = await connection.QuerySingleAsync<ShippingAddressRow>(
             new CommandDefinition(
                 FindShippingAddressSql,
-                new { AddressId = addressId, command.UserId },
+                new { p_address_id = addressId, p_user_id = command.UserId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
@@ -642,8 +342,9 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var project = await connection.QuerySingleOrDefaultAsync<ProjectForOrderRow>(
             new CommandDefinition(
                 FindProjectForOrderSql,
-                new { command.ProjectId, command.UserId },
+                new { p_project_id = command.ProjectId, p_user_id = command.UserId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (project is null)
@@ -672,8 +373,9 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var sku = await connection.QuerySingleOrDefaultAsync<SkuForOrderRow>(
             new CommandDefinition(
                 FindSkuForOrderSql,
-                new { command.SkuId },
+                new { p_sku_id = command.SkuId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (sku is null)
@@ -704,8 +406,9 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var shippingAddress = await connection.QuerySingleOrDefaultAsync<ShippingAddressRow>(
             new CommandDefinition(
                 FindShippingAddressSql,
-                new { AddressId = command.ShippingAddressId, command.UserId },
+                new { p_address_id = command.ShippingAddressId, p_user_id = command.UserId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (shippingAddress is null)
@@ -737,82 +440,98 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
                 InsertOrderSql,
                 new
                 {
-                    OrderNo = orderNo,
-                    command.UserId,
-                    Status = orderStatus,
-                    TotalAmount = totalAmount,
-                    DiscountAmount = command.DiscountAmount,
-                    FreightAmount = command.FreightAmount,
-                    PayAmount = payAmount,
-                    ShipReceiver = shippingAddress.ReceiverName,
-                    ShipPhone = shippingAddress.Phone,
-                    ShipProvince = shippingAddress.Province,
-                    ShipCity = shippingAddress.City,
-                    ShipDistrict = NormalizeNullable(shippingAddress.District),
-                    ShipAddress = shippingAddress.AddressDetail,
-                    ShipPostal = NormalizeNullable(shippingAddress.PostalCode),
-                    Remark = NormalizeNullable(command.Remark),
-                    EstimatedShipDate = estimatedShipDate,
-                    PaidAt = paidAt
+                    p_order_no = orderNo,
+                    p_user_id = command.UserId,
+                    p_status = orderStatus,
+                    p_total_amount = totalAmount,
+                    p_discount_amount = command.DiscountAmount,
+                    p_freight_amount = command.FreightAmount,
+                    p_pay_amount = payAmount,
+                    p_ship_receiver = shippingAddress.ReceiverName,
+                    p_ship_phone = shippingAddress.Phone,
+                    p_ship_province = shippingAddress.Province,
+                    p_ship_city = shippingAddress.City,
+                    p_ship_district = NormalizeNullable(shippingAddress.District),
+                    p_ship_address = shippingAddress.AddressDetail,
+                    p_ship_postal = NormalizeNullable(shippingAddress.PostalCode),
+                    p_remark = NormalizeNullable(command.Remark),
+                    p_estimated_ship_date = estimatedShipDate,
+                    p_paid_at = paidAt
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var orderId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetLastInsertIdSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 InsertOrderItemSql,
                 new
                 {
-                    OrderId = orderId,
-                    command.ProjectId,
-                    ProjectVersionId = project.ProjectVersionId.Value,
-                    command.SkuId,
-                    command.Quantity,
-                    UnitPrice = unitPrice,
-                    Subtotal = discountedSubtotal
+                    p_order_id = orderId,
+                    p_project_id = command.ProjectId,
+                    p_project_version_id = project.ProjectVersionId.Value,
+                    p_sku_id = command.SkuId,
+                    p_quantity = command.Quantity,
+                    p_unit_price = unitPrice,
+                    p_subtotal = discountedSubtotal
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var orderItemId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetLastInsertIdSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 InsertPriceSnapshotSql,
                 new
                 {
-                    OrderItemId = orderItemId,
-                    sku.SpuCode,
-                    sku.SpuName,
-                    sku.SkuCode,
-                    sku.SizeLabel,
-                    sku.BindingLabel,
-                    sku.LayoutLabel,
-                    CoverDescription = BuildCoverDescription(project),
-                    PageCount = pageCount,
-                    ImageCount = imageCount,
-                    BasePrice = sku.BasePrice,
-                    PageUnitPrice = sku.PageUnitPrice,
-                    CalculatedPrice = calculatedUnitPrice,
-                    Discount = command.DiscountAmount,
-                    FinalPrice = unitPrice,
-                    EstimatedShipDate = estimatedShipDate
+                    p_order_item_id = orderItemId,
+                    p_spu_code = sku.SpuCode,
+                    p_spu_name = sku.SpuName,
+                    p_sku_code = sku.SkuCode,
+                    p_size_label = sku.SizeLabel,
+                    p_binding_label = sku.BindingLabel,
+                    p_layout_label = sku.LayoutLabel,
+                    p_cover_description = BuildCoverDescription(project),
+                    p_page_count = pageCount,
+                    p_image_count = imageCount,
+                    p_base_price = sku.BasePrice,
+                    p_page_unit_price = sku.PageUnitPrice,
+                    p_calculated_price = calculatedUnitPrice,
+                    p_discount = command.DiscountAmount,
+                    p_final_price = unitPrice,
+                    p_estimated_ship_date = estimatedShipDate
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var priceSnapshotId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetLastInsertIdSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 UpdateOrderItemSnapshotSql,
-                new { PriceSnapshotId = priceSnapshotId, OrderItemId = orderItemId },
+                new { p_price_snapshot_id = priceSnapshotId, p_order_item_id = orderItemId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
@@ -820,26 +539,32 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
                 InsertPaymentSql,
                 new
                 {
-                    PaymentNo = paymentNo,
-                    OrderId = orderId,
-                    command.UserId,
-                    PayChannel = command.PayChannel,
-                    PayAmount = payAmount,
-                    Status = paymentStatus,
-                    PaidAt = paidAt,
-                    ExpiredAt = expiredAt
+                    p_payment_no = paymentNo,
+                    p_order_id = orderId,
+                    p_user_id = command.UserId,
+                    p_pay_channel = command.PayChannel,
+                    p_pay_amount = payAmount,
+                    p_status = paymentStatus,
+                    p_paid_at = paidAt,
+                    p_expired_at = expiredAt
                 },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var paymentId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+            new CommandDefinition(
+                GetLastInsertIdSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
 
         await connection.ExecuteAsync(
             new CommandDefinition(
                 UpdateProjectStatusSql,
-                new { command.ProjectId },
+                new { p_project_id = command.ProjectId },
                 transaction: transaction,
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
@@ -861,12 +586,38 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         OrderListFilter filter,
         CancellationToken cancellationToken)
     {
+        return await GetOrdersCoreAsync(
+            filter.UserId,
+            null,
+            filter.Status,
+            filter.PageNumber,
+            filter.PageSize,
+            cancellationToken);
+    }
+
+    public Task<OrderDetailQueryModel?> GetOrderDetailAsync(
+        long userId,
+        string orderNo,
+        CancellationToken cancellationToken)
+    {
+        return GetOrderDetailCoreAsync(userId, orderNo, cancellationToken);
+    }
+
+    private async Task<OrderListQueryResultModel> GetOrdersCoreAsync(
+        long? userId,
+        string? keyword,
+        int? status,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
         var totalCount = await connection.ExecuteScalarAsync<int>(
             new CommandDefinition(
                 CountOrdersSql,
-                new { filter.UserId, filter.Status },
+                new { p_user_id = userId, p_keyword = NormalizeNullable(keyword), p_status = status },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var rows = await connection.QueryAsync<OrderListRow>(
@@ -874,11 +625,13 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
                 ListOrdersSql,
                 new
                 {
-                    filter.UserId,
-                    filter.Status,
-                    filter.PageSize,
-                    Offset = (filter.PageNumber - 1) * filter.PageSize
+                    p_user_id = userId,
+                    p_keyword = NormalizeNullable(keyword),
+                    p_status = status,
+                    p_page_size = pageSize,
+                    p_offset = (pageNumber - 1) * pageSize
                 },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         var items = rows
@@ -902,8 +655,8 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         return new OrderListQueryResultModel(items, totalCount);
     }
 
-    public async Task<OrderDetailQueryModel?> GetOrderDetailAsync(
-        long userId,
+    private async Task<OrderDetailQueryModel?> GetOrderDetailCoreAsync(
+        long? userId,
         string orderNo,
         CancellationToken cancellationToken)
     {
@@ -912,7 +665,8 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var header = await connection.QuerySingleOrDefaultAsync<OrderHeaderRow>(
             new CommandDefinition(
                 FindOrderHeaderSql,
-                new { UserId = userId, OrderNo = orderNo },
+                new { p_user_id = userId, p_order_no = orderNo },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         if (header is null)
@@ -923,7 +677,8 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
         var itemRows = await connection.QueryAsync<OrderItemRow>(
             new CommandDefinition(
                 FindOrderItemsSql,
-                new { OrderId = header.OrderId },
+                new { p_order_id = header.OrderId },
+                commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
         IReadOnlyCollection<OrderShipmentEventModel> shipmentEvents = Array.Empty<OrderShipmentEventModel>();
@@ -932,7 +687,8 @@ public sealed class OrderQueryStore(string connectionString) : IOrderQueryStore
             var eventRows = await connection.QueryAsync<ShipmentEventRow>(
                 new CommandDefinition(
                     FindShipmentEventsSql,
-                    new { ShipmentId = header.ShipmentId.Value },
+                    new { p_shipment_id = header.ShipmentId.Value },
+                    commandType: CommandType.StoredProcedure,
                     cancellationToken: cancellationToken));
 
             shipmentEvents = eventRows

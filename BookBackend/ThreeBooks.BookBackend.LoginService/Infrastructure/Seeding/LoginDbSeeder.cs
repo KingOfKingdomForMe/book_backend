@@ -22,7 +22,7 @@ public sealed class LoginDbSeeder(
         var adminRole = await EnsureRoleAsync(
             SystemRoles.Admin,
             "Administrator",
-            [SystemPermissions.AuthSelf, SystemPermissions.UserManage, SystemPermissions.RoleManage],
+            SystemPermissionCatalog.DefaultAdminPermissionCodes,
             cancellationToken);
 
         var userRole = await EnsureRoleAsync(
@@ -131,6 +131,11 @@ public sealed class LoginDbSeeder(
 
             _dbContext.Roles.Add(role);
         }
+        else if (!string.Equals(role.Name, roleName, StringComparison.Ordinal))
+        {
+            role.Name = roleName;
+            role.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        }
 
         var permissions = await EnsurePermissionsAsync(permissionCodes, cancellationToken);
 
@@ -175,16 +180,28 @@ public sealed class LoginDbSeeder(
         var now = DateTimeOffset.UtcNow;
         foreach (var code in normalizedCodes)
         {
-            if (permissions.Any(entity => entity.Code == code))
+            var existing = permissions.FirstOrDefault(entity => string.Equals(entity.Code, code, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
             {
+                if (SystemPermissionCatalog.TryGet(code, out var definition)
+                    && definition is not null
+                    && !string.Equals(existing.Name, definition.Name, StringComparison.Ordinal))
+                {
+                    existing.Name = definition.Name;
+                }
+
                 continue;
             }
+
+            var name = SystemPermissionCatalog.TryGet(code, out var newDefinition) && newDefinition is not null
+                ? newDefinition.Name
+                : code;
 
             var permission = new Permission
             {
                 Id = Guid.NewGuid(),
                 Code = code,
-                Name = code,
+                Name = name,
                 CreatedAtUtc = now
             };
 

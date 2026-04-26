@@ -28,6 +28,8 @@ builder.Services.AddBookBackendApi(builder.Configuration);
 
 var app = builder.Build();
 
+await app.InitializeBookBackendApiAsync();
+
 var swaggerEnabled = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled");
 
 if (swaggerEnabled)
@@ -36,6 +38,7 @@ if (swaggerEnabled)
     app.UseSwaggerUI();
 }
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

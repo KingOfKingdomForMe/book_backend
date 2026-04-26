@@ -86,6 +86,35 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
             BuildOptionalProxyUrl(result.PreviewFile));
     }
 
+    public async Task<AlbumTemplateDetailResponse?> UpdateAsync(
+        string templateCode,
+        UpdateAlbumTemplateRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var normalizedTemplateCode = NormalizeRequiredCode(templateCode, nameof(templateCode), 64);
+        var jsonSource = NormalizeRequiredJsonSource(request.JsonSource, nameof(request.JsonSource));
+        var command = new AlbumTemplateUpdateCommandModel(
+            NormalizeRequiredText(request.Name, nameof(request.Name), 128),
+            NormalizeOptionalText(request.Description, 512, nameof(request.Description)),
+            NormalizeOptionalCode(request.BookType, nameof(request.BookType), 32),
+            NormalizeRequiredCode(request.PageType, nameof(request.PageType), 32),
+            NormalizeOptionalCode(request.Category, nameof(request.Category), 32),
+            NormalizeOptionalCode(request.ThemeCode, nameof(request.ThemeCode), 64),
+            NormalizeSchemaVersion(request.SchemaVersion, jsonSource),
+            jsonSource,
+            NormalizeNullableId(request.PreviewFileId, nameof(request.PreviewFileId)),
+            NormalizeNullableId(request.CreatedByUserId, nameof(request.CreatedByUserId)),
+            request.IsBuiltIn,
+            request.IsActive,
+            NormalizeSortOrder(request.SortOrder));
+
+        var result = await queryStore.UpdateAsync(normalizedTemplateCode, command, cancellationToken);
+        return result is null ? null : MapDetail(result);
+    }
+
     private static string? NormalizeKeyword(string? keyword)
     {
         var normalized = keyword?.Trim();
