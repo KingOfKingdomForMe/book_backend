@@ -102,51 +102,27 @@ public sealed class AlbumService(
         throw new InvalidOperationException("Unable to allocate a unique share code.");
     }
 
-    public async Task<CreateAlbumPageResponse?> AddPageAsync(
-        long projectId,
-        CreateAlbumPageRequest request,
+    public async Task<SaveAlbumPagesResponse?> SavePagesAsync(
+        string shareCode,
+        SaveAlbumPagesRequest request,
         RequestContext context,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Pages);
 
-        var pageNo = NormalizePositiveNumber(request.PageNo, nameof(request.PageNo));
+        var normalizedShareCode = NormalizeShareCode(shareCode);
+        var pageNumbers = new HashSet<int>();
 
-        var images = (request.Images ?? Array.Empty<CreateAlbumPageAssetRequest>())
-            .Select(image => new AlbumPageAssetWriteModel(
-                NormalizeNonNegative(image.SortOrder, nameof(image.SortOrder)),
-                NormalizeCode(image.Role, nameof(image.Role), 32),
-                NormalizePositiveId(image.FileId, nameof(image.FileId)),
-                NormalizeNullableDimension(image.Width, nameof(image.Width)),
-                NormalizeNullableDimension(image.Height, nameof(image.Height)),
-                NormalizeOptionalText(image.AltText, 256, nameof(image.AltText)),
-                NormalizeOptionalText(image.Caption, 256, nameof(image.Caption)),
-                NormalizeOptionalJson(image.CropData)))
+        var pages = request.Pages
+            .Select(page => BuildPageWriteCommand(page, pageNumbers))
+            .OrderBy(page => page.SortOrder)
+            .ThenBy(page => page.PageNo)
             .ToArray();
 
-        var jsonSource = NormalizeRequiredJsonSource(request.JsonSource, nameof(request.JsonSource));
-        var thumbnailFileId = images
-            .OrderBy(image => image.SortOrder)
-            .Select(image => (long?)image.FileId)
-            .FirstOrDefault();
-        var schemaVersion = ExtractSchemaVersion(jsonSource);
-
-        var command = new AlbumPageWriteCommandModel(
-            pageNo,
-            NormalizeRequiredText(request.PageLabel, nameof(request.PageLabel), 64),
-            NormalizeCode(request.PageType, nameof(request.PageType), 32),
-            pageNo,
-            jsonSource,
-            NormalizeNullableId(request.HtmlFileId, nameof(request.HtmlFileId)),
-            thumbnailFileId,
-            null,
-            null,
-            schemaVersion,
-            images);
-
-        var result = await queryStore.AddPageAsync(
-            NormalizePositiveId(projectId, nameof(projectId)),
-            command,
+        var result = await queryStore.SavePagesAsync(
+            normalizedShareCode,
+            new AlbumPagesWriteCommandModel(pages, ResolveSnapshotSchemaVersion(pages)),
             cancellationToken);
 
         if (result is null)
@@ -154,12 +130,13 @@ public sealed class AlbumService(
             return null;
         }
 
-        return new CreateAlbumPageResponse(
+        return new SaveAlbumPagesResponse(
             result.ProjectId,
             result.VersionId,
-            result.VersionPageId,
-            result.PageNo,
-            result.IsPublic ? BuildPageUrl(result.ShareCode, result.PageNo) : null);
+            result.ShareCode,
+            result.PageCount,
+            result.ImageCount,
+            result.IsPublic ? BuildShareUrl(result.ShareCode) : null);
     }
 
     public async Task<AlbumPreviewDetailResponse?> GetPreviewAsync(
@@ -351,6 +328,90 @@ public sealed class AlbumService(
         }
 
         return normalized;
+    }
+
+    private static AlbumPageWriteCommandModel BuildPageWriteCommand(
+        SaveAlbumPageRequest request,
+        ISet<int> pageNumbers)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var pageNo = NormalizePositiveNumber(request.PageNo, nameof(request.PageNo));
+        if (!pageNumbers.Add(pageNo))
+        {
+            throw new ArgumentException($"Duplicate page number is not allowed: {pageNo}.", nameof(request.PageNo));
+        }
+
+        var images = (request.Images ?? Array.Empty<SaveAlbumPageAssetRequest>())
+            .Select(image => new AlbumPageAssetWriteModel(
+                NormalizeNonNegative(image.SortOrder, nameof(image.SortOrder)),
+                NormalizeCode(image.Role, nameof(image.Role), 32),
+                NormalizePositiveId(image.FileId, nameof(image.FileId)),
+                NormalizeNullableDimension(image.Width, nameof(image.Width)),
+                NormalizeNullableDimension(image.Height, nameof(image.Height)),
+                NormalizeOptionalText(image.AltText, 256, nameof(image.AltText)),
+                NormalizeOptionalText(image.Caption, 256, nameof(image.Caption)),
+                NormalizeOptionalJson(image.CropData)))
+            .ToArray();
+
+        var jsonSource = NormalizeRequiredJsonSource(request.JsonSource, nameof(request.JsonSource));
+        var thumbnailFileId = images
+            .OrderBy(image => image.SortOrder)
+            .Select(image => (long?)image.FileId)
+            .FirstOrDefault();
+        var schemaVersion = ExtractSchemaVersion(jsonSource);
+
+        return new AlbumPageWriteCommandModel(
+            pageNo,
+            ResolvePageLabel(request.PageLabel, pageNo),
+            ResolvePageType(request.PageType, jsonSource),
+            request.SortOrder.HasValue ? NormalizeNonNegative(request.SortOrder.Value, nameof(request.SortOrder)) : pageNo,
+            jsonSource,
+            NormalizeNullableId(request.HtmlFileId, nameof(request.HtmlFileId)),
+            thumbnailFileId,
+            NormalizeNullableDimension(request.PageWidth, nameof(request.PageWidth)),
+            NormalizeNullableDimension(request.PageHeight, nameof(request.PageHeight)),
+            schemaVersion,
+            images);
+    }
+
+    private static string ResolvePageLabel(string? pageLabel, int pageNo)
+    {
+        return string.IsNullOrWhiteSpace(pageLabel)
+            ? $"第{pageNo}页"
+            : NormalizeRequiredText(pageLabel, nameof(pageLabel), 64);
+    }
+
+    private static string ResolvePageType(string? pageType, string jsonSource)
+    {
+        return NormalizeCode(pageType, nameof(pageType), 32, TryExtractTopLevelString(jsonSource, "pageType") ?? "content");
+    }
+
+    private static string ResolveSnapshotSchemaVersion(IReadOnlyCollection<AlbumPageWriteCommandModel> pages)
+    {
+        return pages.Count == 0
+            ? DefaultJsonSchemaVersion
+            : NormalizeVersion(pages.First().SchemaVersion);
+    }
+
+    private static string? TryExtractTopLevelString(string jsonSource, string propertyName)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(jsonSource);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(propertyName, out var property)
+                && property.ValueKind == JsonValueKind.String)
+            {
+                var value = property.GetString()?.Trim();
+                return string.IsNullOrWhiteSpace(value) ? null : value;
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return null;
     }
 
     private static bool IsShareCodeConflict(ArgumentException exception)
@@ -624,11 +685,6 @@ public sealed class AlbumService(
     private static string BuildShareUrl(string shareCode)
     {
         return $"/albums/{Uri.EscapeDataString(shareCode)}";
-    }
-
-    private static string BuildPageUrl(string shareCode, int pageNumber)
-    {
-        return $"/api/albums/{Uri.EscapeDataString(shareCode)}/pages/{pageNumber}";
     }
 
     private static string BuildProxyUrl(AlbumStoredFileReference file)

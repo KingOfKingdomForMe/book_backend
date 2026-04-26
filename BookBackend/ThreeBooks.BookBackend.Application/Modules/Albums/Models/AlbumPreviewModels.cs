@@ -95,13 +95,15 @@ public sealed record AlbumPageWriteCommandModel(
     string SchemaVersion,
     IReadOnlyCollection<AlbumPageAssetWriteModel> Images);
 
-public sealed record AlbumPageWriteResultModel(
+public sealed record AlbumPagesWriteCommandModel(
+    IReadOnlyCollection<AlbumPageWriteCommandModel> Pages,
+    string SnapshotSchemaVersion);
+
+public sealed record AlbumPagesWriteResultModel(
     long ProjectId,
     long VersionId,
-    long VersionPageId,
     string ShareCode,
     bool IsPublic,
-    int PageNo,
     int PageCount,
     int ImageCount,
     string SchemaVersion);

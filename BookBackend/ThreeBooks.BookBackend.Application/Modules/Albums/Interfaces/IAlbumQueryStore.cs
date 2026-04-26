@@ -12,9 +12,9 @@ public interface IAlbumQueryStore
         AlbumCreateCommandModel command,
         CancellationToken cancellationToken);
 
-    Task<AlbumPageWriteResultModel?> AddPageAsync(
-        long projectId,
-        AlbumPageWriteCommandModel command,
+    Task<AlbumPagesWriteResultModel?> SavePagesAsync(
+        string shareCode,
+        AlbumPagesWriteCommandModel command,
         CancellationToken cancellationToken);
 
     Task<AlbumPreviewQueryModel?> GetPreviewAsync(

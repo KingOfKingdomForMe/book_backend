@@ -11,9 +11,9 @@ public interface IAlbumService
         RequestContext context,
         CancellationToken cancellationToken);
 
-    Task<CreateAlbumPageResponse?> AddPageAsync(
-        long projectId,
-        CreateAlbumPageRequest request,
+    Task<SaveAlbumPagesResponse?> SavePagesAsync(
+        string shareCode,
+        SaveAlbumPagesRequest request,
         RequestContext context,
         CancellationToken cancellationToken);
 

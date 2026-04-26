@@ -26,21 +26,21 @@ public sealed class AlbumsController(IAlbumService albumService) : ApiController
         }
     }
 
-    [HttpPost("{projectId:long}/pages")]
-    [ProducesResponseType<CreateAlbumPageResponse>(StatusCodes.Status201Created)]
+    [HttpPut("{shareCode}/pages")]
+    [ProducesResponseType<SaveAlbumPagesResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<CreateAlbumPageResponse>> AddPageAsync(
-        long projectId,
-        [FromBody] CreateAlbumPageRequest request,
+    public async Task<ActionResult<SaveAlbumPagesResponse>> SavePagesAsync(
+        string shareCode,
+        [FromBody] SaveAlbumPagesRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
-            var response = await albumService.AddPageAsync(projectId, request, BuildRequestContext(), cancellationToken);
+            var response = await albumService.SavePagesAsync(shareCode, request, BuildRequestContext(), cancellationToken);
             return response is null
                 ? NotFound()
-                : StatusCode(StatusCodes.Status201Created, response);
+                : Ok(response);
         }
         catch (ArgumentException exception)
         {

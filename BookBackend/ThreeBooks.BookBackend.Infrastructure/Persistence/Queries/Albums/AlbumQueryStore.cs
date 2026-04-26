@@ -188,15 +188,7 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             p.shared_version_id AS SharedVersionId,
             p.is_public AS IsPublic
         FROM book_project p
-        WHERE p.id = @ProjectId
-        LIMIT 1;
-        """;
-
-    private const string FindExistingVersionPageSql = """
-        SELECT id
-        FROM book_project_version_page
-        WHERE project_version_id = @ProjectVersionId
-          AND page_no = @PageNo
+        WHERE p.share_code = @ShareCode
         LIMIT 1;
         """;
 
@@ -278,6 +270,18 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             @Caption,
             @CropJson,
             UTC_TIMESTAMP());
+        """;
+
+    private const string DeleteVersionPageAssetsSql = """
+        DELETE asset
+        FROM book_project_version_page_asset asset
+        INNER JOIN book_project_version_page page ON page.id = asset.version_page_id
+        WHERE page.project_version_id = @ProjectVersionId;
+        """;
+
+    private const string DeleteVersionPagesSql = """
+        DELETE FROM book_project_version_page
+        WHERE project_version_id = @ProjectVersionId;
         """;
 
     private const string FindVersionStatsSql = """
@@ -487,9 +491,9 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             0);
     }
 
-    public async Task<AlbumPageWriteResultModel?> AddPageAsync(
-        long projectId,
-        AlbumPageWriteCommandModel command,
+    public async Task<AlbumPagesWriteResultModel?> SavePagesAsync(
+        string shareCode,
+        AlbumPagesWriteCommandModel command,
         CancellationToken cancellationToken)
     {
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
@@ -498,7 +502,7 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         var projectRow = await connection.QuerySingleOrDefaultAsync<ProjectWriteRow>(
             new CommandDefinition(
                 FindProjectForWriteSql,
-                new { ProjectId = projectId },
+                new { ShareCode = shareCode },
                 transaction: transaction,
                 cancellationToken: cancellationToken));
 
@@ -507,36 +511,23 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             return null;
         }
 
-        var existingPageId = await connection.ExecuteScalarAsync<long?>(
-            new CommandDefinition(
-                FindExistingVersionPageSql,
-                new
-                {
-                    ProjectVersionId = projectRow.SharedVersionId.Value,
-                    command.PageNo
-                },
-                transaction: transaction,
-                cancellationToken: cancellationToken));
-
-        if (existingPageId.HasValue)
-        {
-            throw new ArgumentException("Page number already exists in the album.", nameof(command.PageNo));
-        }
-
         var fileIds = new HashSet<long>();
-        if (command.HtmlFileId.HasValue)
+        foreach (var page in command.Pages)
         {
-            fileIds.Add(command.HtmlFileId.Value);
-        }
+            if (page.HtmlFileId.HasValue)
+            {
+                fileIds.Add(page.HtmlFileId.Value);
+            }
 
-        if (command.ThumbnailFileId.HasValue)
-        {
-            fileIds.Add(command.ThumbnailFileId.Value);
-        }
+            if (page.ThumbnailFileId.HasValue)
+            {
+                fileIds.Add(page.ThumbnailFileId.Value);
+            }
 
-        foreach (var image in command.Images)
-        {
-            fileIds.Add(image.FileId);
+            foreach (var image in page.Images)
+            {
+                fileIds.Add(image.FileId);
+            }
         }
 
         var resolvedFiles = fileIds.Count == 0
@@ -561,62 +552,79 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 nameof(command));
         }
 
-        var htmlFile = command.HtmlFileId.HasValue ? resolvedFiles[command.HtmlFileId.Value] : null;
-        var thumbnailFile = command.ThumbnailFileId.HasValue ? resolvedFiles[command.ThumbnailFileId.Value] : null;
-
         await connection.ExecuteAsync(
             new CommandDefinition(
-                InsertVersionPageSql,
-                new
-                {
-                    ProjectVersionId = projectRow.SharedVersionId.Value,
-                    command.PageNo,
-                    command.PageLabel,
-                    command.PageType,
-                    command.SortOrder,
-                    JsonSource = command.JsonSource,
-                    JsonFileId = (long?)null,
-                    JsonBucket = (string?)null,
-                    JsonObjectKey = (string?)null,
-                    HtmlFileId = htmlFile?.FileId,
-                    HtmlBucket = htmlFile?.Bucket,
-                    HtmlObjectKey = htmlFile?.ObjectKey,
-                    ThumbnailFileId = thumbnailFile?.FileId,
-                    ThumbnailBucket = thumbnailFile?.Bucket,
-                    ThumbnailObjectKey = thumbnailFile?.ObjectKey,
-                    command.PageWidth,
-                    command.PageHeight,
-                    command.SchemaVersion
-                },
+                DeleteVersionPageAssetsSql,
+                new { ProjectVersionId = projectRow.SharedVersionId.Value },
                 transaction: transaction,
                 cancellationToken: cancellationToken));
 
-        var versionPageId = await connection.ExecuteScalarAsync<long>(
-            new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                DeleteVersionPagesSql,
+                new { ProjectVersionId = projectRow.SharedVersionId.Value },
+                transaction: transaction,
+                cancellationToken: cancellationToken));
 
-        foreach (var image in command.Images.OrderBy(item => item.SortOrder))
+        foreach (var page in command.Pages.OrderBy(item => item.SortOrder).ThenBy(item => item.PageNo))
         {
-            var imageFile = resolvedFiles[image.FileId];
+            var htmlFile = page.HtmlFileId.HasValue ? resolvedFiles[page.HtmlFileId.Value] : null;
+            var thumbnailFile = page.ThumbnailFileId.HasValue ? resolvedFiles[page.ThumbnailFileId.Value] : null;
 
             await connection.ExecuteAsync(
                 new CommandDefinition(
-                    InsertVersionPageAssetSql,
+                    InsertVersionPageSql,
                     new
                     {
-                        VersionPageId = versionPageId,
-                        image.SortOrder,
-                        image.Role,
-                        FileId = imageFile.FileId,
-                        BucketName = imageFile.Bucket,
-                        ObjectKey = imageFile.ObjectKey,
-                        image.Width,
-                        image.Height,
-                        AltText = NormalizeNullable(image.AltText),
-                        Caption = NormalizeNullable(image.Caption),
-                        CropJson = NormalizeNullable(image.CropJson)
+                        ProjectVersionId = projectRow.SharedVersionId.Value,
+                        page.PageNo,
+                        page.PageLabel,
+                        page.PageType,
+                        page.SortOrder,
+                        JsonSource = page.JsonSource,
+                        JsonFileId = (long?)null,
+                        JsonBucket = (string?)null,
+                        JsonObjectKey = (string?)null,
+                        HtmlFileId = htmlFile?.FileId,
+                        HtmlBucket = htmlFile?.Bucket,
+                        HtmlObjectKey = htmlFile?.ObjectKey,
+                        ThumbnailFileId = thumbnailFile?.FileId,
+                        ThumbnailBucket = thumbnailFile?.Bucket,
+                        ThumbnailObjectKey = thumbnailFile?.ObjectKey,
+                        page.PageWidth,
+                        page.PageHeight,
+                        page.SchemaVersion
                     },
                     transaction: transaction,
                     cancellationToken: cancellationToken));
+
+            var versionPageId = await connection.ExecuteScalarAsync<long>(
+                new CommandDefinition(GetLastInsertIdSql, transaction: transaction, cancellationToken: cancellationToken));
+
+            foreach (var image in page.Images.OrderBy(item => item.SortOrder))
+            {
+                var imageFile = resolvedFiles[image.FileId];
+
+                await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        InsertVersionPageAssetSql,
+                        new
+                        {
+                            VersionPageId = versionPageId,
+                            image.SortOrder,
+                            image.Role,
+                            FileId = imageFile.FileId,
+                            BucketName = imageFile.Bucket,
+                            ObjectKey = imageFile.ObjectKey,
+                            image.Width,
+                            image.Height,
+                            AltText = NormalizeNullable(image.AltText),
+                            Caption = NormalizeNullable(image.Caption),
+                            CropJson = NormalizeNullable(image.CropJson)
+                        },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken));
+            }
         }
 
         var stats = await connection.QuerySingleAsync<VersionStatsRow>(
@@ -637,7 +645,7 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 cancellationToken: cancellationToken)))
             .ToArray();
 
-        var snapshotData = BuildSnapshotData(command.SchemaVersion, projectRow.ShareCode, snapshotPages);
+        var snapshotData = BuildSnapshotData(command.SnapshotSchemaVersion, projectRow.ShareCode, snapshotPages);
 
         await connection.ExecuteAsync(
             new CommandDefinition(
@@ -666,16 +674,14 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
 
         await transaction.CommitAsync(cancellationToken);
 
-        return new AlbumPageWriteResultModel(
+        return new AlbumPagesWriteResultModel(
             projectRow.ProjectId,
             projectRow.SharedVersionId.Value,
-            versionPageId,
             projectRow.ShareCode,
             projectRow.IsPublic,
-            command.PageNo,
             pageCount,
             imageCount,
-            command.SchemaVersion);
+            command.SnapshotSchemaVersion);
     }
 
     public async Task<AlbumPreviewQueryModel?> GetPreviewAsync(
