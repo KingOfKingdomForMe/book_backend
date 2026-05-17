@@ -1,13 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using ThreeBooks.BookBackend.Application.Modules.Files.Interfaces;
+using ThreeBooks.BookBackend.Contracts.Common;
 using ThreeBooks.BookBackend.Contracts.Files.Requests;
 using ThreeBooks.BookBackend.Contracts.Files.Responses;
 
 namespace ThreeBooks.BookBackend.Api.Controllers.Files;
 
 [Route("api/files")]
-public sealed class FilesController(IFileStorageService fileStorageService) : ApiControllerBase
+public sealed class FilesController(
+    IFileStorageService fileStorageService,
+    IUserGalleryService userGalleryService) : ApiControllerBase
 {
     [HttpPost]
     [Consumes("multipart/form-data")]
@@ -63,7 +66,110 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
             return Problem(
                 detail: exception.Message,
                 statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "File storage is not configured.");
+                title: "File storage is unavailable.");
+        }
+    }
+
+    [HttpPost("users/{userId:long}/gallery/images")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<UserGalleryImageItemResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<UserGalleryImageItemResponse>> UploadUserGalleryImageAsync(
+        long userId,
+        [FromForm] UploadUserGalleryImageForm form,
+        CancellationToken cancellationToken)
+    {
+        var file = form.File;
+
+        if (file is null)
+        {
+            return BadRequest("Form field 'file' is required.");
+        }
+
+        if (file.Length <= 0)
+        {
+            return BadRequest("Uploaded file cannot be empty.");
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+
+            var response = await userGalleryService.UploadImageAsync(
+                userId,
+                new UploadUserGalleryImageRequest(form.Bucket, form.FileName),
+                stream,
+                file.FileName,
+                file.ContentType,
+                file.Length,
+                BuildRequestContext(),
+                cancellationToken);
+
+            return StatusCode(StatusCodes.Status201Created, PopulateGalleryUrls(response));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Problem(
+                detail: exception.Message,
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "File storage is unavailable.");
+        }
+    }
+
+    [HttpGet("users/{userId:long}/gallery/images")]
+    [ProducesResponseType<PagedResult<UserGalleryImageItemResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResult<UserGalleryImageItemResponse>>> GetUserGalleryImagesAsync(
+        long userId,
+        [FromQuery] ListUserGalleryImagesRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await userGalleryService.GetImagesAsync(userId, request, BuildRequestContext(), cancellationToken);
+            return Ok(PopulateGalleryUrls(response));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
+    [HttpDelete("users/{userId:long}/gallery/images/{fileId:long}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> DeleteUserGalleryImageAsync(
+        long userId,
+        long fileId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var deleted = await userGalleryService.DeleteImageAsync(userId, fileId, BuildRequestContext(), cancellationToken);
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Problem(
+                detail: exception.Message,
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "File storage is unavailable.");
         }
     }
 
@@ -98,7 +204,7 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
             return Problem(
                 detail: exception.Message,
                 statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "File storage is not configured.");
+                title: "File storage is unavailable.");
         }
     }
 
@@ -148,7 +254,7 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
             return Problem(
                 detail: exception.Message,
                 statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "File storage is not configured.");
+                title: "File storage is unavailable.");
         }
     }
 
@@ -181,7 +287,7 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
             return Problem(
                 detail: exception.Message,
                 statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "File storage is not configured.");
+                title: "File storage is unavailable.");
         }
     }
 
@@ -193,6 +299,25 @@ public sealed class FilesController(IFileStorageService fileStorageService) : Ap
     private string BuildAbsoluteProxyUrl(string bucket, string objectKey)
     {
         return $"{Request.Scheme}://{Request.Host}{Request.PathBase}{BuildProxyUrl(bucket, objectKey)}";
+    }
+
+    private UserGalleryImageItemResponse PopulateGalleryUrls(UserGalleryImageItemResponse item)
+    {
+        var proxyUrl = BuildProxyUrl(item.Bucket, item.ObjectKey);
+
+        return item with
+        {
+            ProxyUrl = proxyUrl,
+            AccessUrl = BuildAbsoluteProxyUrl(item.Bucket, item.ObjectKey)
+        };
+    }
+
+    private PagedResult<UserGalleryImageItemResponse> PopulateGalleryUrls(PagedResult<UserGalleryImageItemResponse> result)
+    {
+        return result with
+        {
+            Items = result.Items.Select(PopulateGalleryUrls).ToArray()
+        };
     }
 
     private static string BuildContentDisposition(string fileName, bool inline)

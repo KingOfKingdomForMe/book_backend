@@ -115,7 +115,7 @@ public static class ApplicationInitializationExtensions
             return true;
         }
 
-        if (string.Equals(normalizedPath, "Files/01_file_storage.sql", StringComparison.OrdinalIgnoreCase))
+        if (normalizedPath.StartsWith("Files/", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

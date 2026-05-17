@@ -10,6 +10,8 @@ namespace ThreeBooks.BookBackend.Infrastructure.Storage;
 
 public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFileObjectStore
 {
+    private const string StorageUnavailableMessage = "Object storage is unreachable. Verify ObjectStorage:ServiceUrl and ensure the file server is online.";
+
     private readonly ObjectStorageOptions _options = options ?? throw new ArgumentNullException(nameof(options));
 
     public string? DefaultBucket => string.IsNullOrWhiteSpace(_options.DefaultBucket)
@@ -22,32 +24,39 @@ public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFile
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        using var client = CreateClient();
-        await EnsureBucketExistsAsync(client, command.Bucket, cancellationToken);
-
-        if (command.Content.CanSeek)
+        try
         {
-            command.Content.Position = 0;
+            using var client = CreateClient();
+            await EnsureBucketExistsAsync(client, command.Bucket, cancellationToken);
+
+            if (command.Content.CanSeek)
+            {
+                command.Content.Position = 0;
+            }
+
+            var request = new PutObjectRequest
+            {
+                BucketName = command.Bucket,
+                Key = command.ObjectKey,
+                InputStream = command.Content,
+                AutoCloseStream = false,
+                AutoResetStreamPosition = false,
+                ContentType = command.ContentType
+            };
+
+            await client.PutObjectAsync(request, cancellationToken);
+
+            return new StoredFileObject(
+                command.Bucket,
+                command.ObjectKey,
+                command.FileName,
+                command.ContentType,
+                command.ContentLength);
         }
-
-        var request = new PutObjectRequest
+        catch (Exception exception) when (IsStorageUnavailableException(exception, cancellationToken))
         {
-            BucketName = command.Bucket,
-            Key = command.ObjectKey,
-            InputStream = command.Content,
-            AutoCloseStream = false,
-            AutoResetStreamPosition = false,
-            ContentType = command.ContentType
-        };
-
-        await client.PutObjectAsync(request, cancellationToken);
-
-        return new StoredFileObject(
-            command.Bucket,
-            command.ObjectKey,
-            command.FileName,
-            command.ContentType,
-            command.ContentLength);
+            throw CreateStorageUnavailableException(exception);
+        }
     }
 
     public async Task<Uri?> GetReadUrlAsync(
@@ -56,24 +65,31 @@ public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFile
         TimeSpan expiresIn,
         CancellationToken cancellationToken)
     {
-        using var client = CreateClient();
-
-        var exists = await ObjectExistsAsync(client, bucket, objectKey, cancellationToken);
-        if (!exists)
+        try
         {
-            return null;
+            using var client = CreateClient();
+
+            var exists = await ObjectExistsAsync(client, bucket, objectKey, cancellationToken);
+            if (!exists)
+            {
+                return null;
+            }
+
+            var request = new GetPreSignedUrlRequest
+            {
+                BucketName = bucket,
+                Key = objectKey,
+                Expires = DateTime.UtcNow.Add(expiresIn),
+                Verb = HttpVerb.GET,
+                Protocol = ResolveProtocol()
+            };
+
+            return new Uri(client.GetPreSignedURL(request));
         }
-
-        var request = new GetPreSignedUrlRequest
+        catch (Exception exception) when (IsStorageUnavailableException(exception, cancellationToken))
         {
-            BucketName = bucket,
-            Key = objectKey,
-            Expires = DateTime.UtcNow.Add(expiresIn),
-            Verb = HttpVerb.GET,
-            Protocol = ResolveProtocol()
-        };
-
-        return new Uri(client.GetPreSignedURL(request));
+            throw CreateStorageUnavailableException(exception);
+        }
     }
 
     public async Task<StoredFileContent?> DownloadAsync(
@@ -111,6 +127,10 @@ public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFile
             client.Dispose();
             return null;
         }
+        catch (Exception exception) when (IsStorageUnavailableException(exception, cancellationToken))
+        {
+            throw CreateStorageUnavailableException(exception);
+        }
         catch
         {
             client.Dispose();
@@ -123,21 +143,28 @@ public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFile
         string objectKey,
         CancellationToken cancellationToken)
     {
-        using var client = CreateClient();
-
-        var exists = await ObjectExistsAsync(client, bucket, objectKey, cancellationToken);
-        if (!exists)
+        try
         {
-            return false;
+            using var client = CreateClient();
+
+            var exists = await ObjectExistsAsync(client, bucket, objectKey, cancellationToken);
+            if (!exists)
+            {
+                return false;
+            }
+
+            await client.DeleteObjectAsync(new DeleteObjectRequest
+            {
+                BucketName = bucket,
+                Key = objectKey
+            }, cancellationToken);
+
+            return true;
         }
-
-        await client.DeleteObjectAsync(new DeleteObjectRequest
+        catch (Exception exception) when (IsStorageUnavailableException(exception, cancellationToken))
         {
-            BucketName = bucket,
-            Key = objectKey
-        }, cancellationToken);
-
-        return true;
+            throw CreateStorageUnavailableException(exception);
+        }
     }
 
     private AmazonS3Client CreateClient()
@@ -220,6 +247,33 @@ public sealed class SeaweedFileObjectStore(ObjectStorageOptions options) : IFile
         return endpointUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
             ? Protocol.HTTPS
             : Protocol.HTTP;
+    }
+
+    private static bool IsStorageUnavailableException(Exception exception, CancellationToken cancellationToken)
+    {
+        return exception switch
+        {
+            InvalidOperationException => false,
+            AmazonS3Exception amazonS3Exception when IsNotFoundException(amazonS3Exception) => false,
+            HttpRequestException => true,
+            AmazonClientException => true,
+            OperationCanceledException when !cancellationToken.IsCancellationRequested => true,
+            TimeoutException => true,
+            _ => false
+        };
+    }
+
+    private static InvalidOperationException CreateStorageUnavailableException(Exception exception)
+    {
+        return new InvalidOperationException(StorageUnavailableMessage, exception);
+    }
+
+    private static bool IsNotFoundException(AmazonS3Exception exception)
+    {
+        return exception.StatusCode == System.Net.HttpStatusCode.NotFound
+            || string.Equals(exception.ErrorCode, "NoSuchKey", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(exception.ErrorCode, "NotFound", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(exception.ErrorCode, "NoSuchBucket", StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class CompositeDisposable(params IDisposable[] disposables) : IDisposable

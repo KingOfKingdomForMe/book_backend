@@ -20,6 +20,7 @@ using ThreeBooks.BookBackend.Infrastructure.Persistence.Files;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.AlbumTemplates;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Albums;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Catalogs;
+using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Files;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Orders;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Unboxings;
 using ThreeBooks.BookBackend.Infrastructure.Storage;
@@ -152,6 +153,10 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("ConnectionStrings:BookBackendDb is required.")));
         services.AddScoped<IFileObjectStore>(_ => new SeaweedFileObjectStore(
             configuration.GetSection("ObjectStorage").Get<ObjectStorageOptions>() ?? new ObjectStorageOptions()));
+        services.AddScoped<IUserGalleryService, UserGalleryService>();
+        services.AddScoped<IUserGalleryQueryStore>(_ => new UserGalleryQueryStore(
+            configuration.GetConnectionString("BookBackendDb")
+            ?? throw new InvalidOperationException("ConnectionStrings:BookBackendDb is required.")));
 
         return services;
     }
