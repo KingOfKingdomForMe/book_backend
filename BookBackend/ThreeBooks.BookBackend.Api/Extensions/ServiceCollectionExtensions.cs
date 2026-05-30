@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -10,6 +11,8 @@ using ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Services;
 using ThreeBooks.BookBackend.Application.Modules.Catalogs.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.Catalogs.Services;
+using ThreeBooks.BookBackend.Application.Modules.CoverTemplates.Interfaces;
+using ThreeBooks.BookBackend.Application.Modules.CoverTemplates.Services;
 using ThreeBooks.BookBackend.Application.Modules.Files.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.Files.Services;
 using ThreeBooks.BookBackend.Application.Modules.Orders.Interfaces;
@@ -120,12 +123,16 @@ public static class ServiceCollectionExtensions
                     []
                 }
             });
+
+            IncludeXmlComments(options, Assembly.GetExecutingAssembly());
+            IncludeXmlComments(options, typeof(ThreeBooks.BookBackend.Contracts.Common.PagedResult<>).Assembly);
         });
 
         services.AddScoped<IAlbumTemplateService, AlbumTemplateService>();
         services.AddScoped<IAlbumTemplateQueryStore>(_ => new AlbumTemplateQueryStore(
             configuration.GetConnectionString("BookBackendDb")
             ?? throw new InvalidOperationException("ConnectionStrings:BookBackendDb is required.")));
+        services.AddScoped<ICoverTemplateService, CoverTemplateService>();
 
         services.AddScoped<IAlbumService, AlbumService>();
         services.AddScoped<IAlbumQueryStore>(_ => new AlbumQueryStore(
@@ -159,5 +166,15 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("ConnectionStrings:BookBackendDb is required.")));
 
         return services;
+    }
+
+    private static void IncludeXmlComments(Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions options, Assembly assembly)
+    {
+        var xmlFileName = $"{assembly.GetName().Name}.xml";
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFileName);
+        if (File.Exists(xmlPath))
+        {
+            options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+        }
     }
 }

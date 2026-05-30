@@ -36,7 +36,7 @@ public sealed class FileMetadataStore(string connectionString) : IFileMetadataSt
                 cancellationToken: cancellationToken));
     }
 
-    public async Task SaveUploadAsync(
+    public async Task<long> SaveUploadAsync(
         StoredFileObject file,
         string originalFileName,
         RequestContext context,
@@ -46,7 +46,7 @@ public sealed class FileMetadataStore(string connectionString) : IFileMetadataSt
 
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
 
-        await connection.ExecuteAsync(
+        var result = await connection.QuerySingleAsync<SaveUploadResult>(
             new CommandDefinition(
                 "usp_FileObject_SaveUpload",
                 new
@@ -65,6 +65,8 @@ public sealed class FileMetadataStore(string connectionString) : IFileMetadataSt
                 },
                 commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
+
+        return result.FileId;
     }
 
     public async Task RecordAccessAsync(
@@ -142,5 +144,10 @@ public sealed class FileMetadataStore(string connectionString) : IFileMetadataSt
     {
         var normalized = value?.Trim();
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private sealed class SaveUploadResult
+    {
+        public long FileId { get; init; }
     }
 }

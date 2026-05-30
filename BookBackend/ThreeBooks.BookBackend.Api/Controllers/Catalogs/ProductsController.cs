@@ -6,9 +6,21 @@ using ThreeBooks.BookBackend.Contracts.Common;
 
 namespace ThreeBooks.BookBackend.Api.Controllers.Catalogs;
 
+/// <summary>
+/// 商品目录查询接口。
+/// </summary>
 [Route("api/products")]
 public sealed class ProductsController(ICatalogService catalogService) : ApiControllerBase
 {
+    /// <summary>
+    /// 分页查询商品列表。
+    /// </summary>
+    /// <remarks>
+    /// 可以按分类 ID、分类别名或关键字筛选。推荐商品列表页优先使用分页参数，避免一次性拉取过多数据。
+    /// </remarks>
+    /// <param name="request">商品列表查询参数，包含分类过滤条件、关键字和分页信息。</param>
+    /// <param name="cancellationToken">请求取消令牌。</param>
+    /// <response code="200">返回分页商品列表。</response>
     [HttpGet]
     [ProducesResponseType<PagedResult<ProductListItemResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResult<ProductListItemResponse>>> GetListAsync(
@@ -19,6 +31,16 @@ public sealed class ProductsController(ICatalogService catalogService) : ApiCont
         return Ok(response);
     }
 
+    /// <summary>
+    /// 获取单个商品详情。
+    /// </summary>
+    /// <remarks>
+    /// 适用于商品详情页加载。返回结果通常包含 SKU、价格及商品展示信息。
+    /// </remarks>
+    /// <param name="id">商品主键标识。</param>
+    /// <param name="cancellationToken">请求取消令牌。</param>
+    /// <response code="200">返回商品详情。</response>
+    /// <response code="404">商品不存在。</response>
     [HttpGet("{id:int}")]
     [ProducesResponseType<ProductDetailResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

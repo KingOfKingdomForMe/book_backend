@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Doma
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Contracts", "ThreeBooks.BookBackend.Contracts\ThreeBooks.BookBackend.Contracts.csproj", "{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThreeBooks.BookBackend.Application.Tests", "ThreeBooks.BookBackend.Application.Tests\ThreeBooks.BookBackend.Application.Tests.csproj", "{F3ED0D68-6C79-4F89-A787-214E98A79D6C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,10 @@ Global
 		{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DFDA5BE4-38B5-4F4F-8A54-80AB14181B74}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F3ED0D68-6C79-4F89-A787-214E98A79D6C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F3ED0D68-6C79-4F89-A787-214E98A79D6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F3ED0D68-6C79-4F89-A787-214E98A79D6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F3ED0D68-6C79-4F89-A787-214E98A79D6C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

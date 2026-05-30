@@ -10,7 +10,7 @@ public interface IFileMetadataStore
         string objectKey,
         CancellationToken cancellationToken);
 
-    Task SaveUploadAsync(
+    Task<long> SaveUploadAsync(
         StoredFileObject file,
         string originalFileName,
         RequestContext context,

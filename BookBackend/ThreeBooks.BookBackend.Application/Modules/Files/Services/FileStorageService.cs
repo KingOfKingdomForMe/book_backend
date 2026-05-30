@@ -47,7 +47,7 @@ public sealed class FileStorageService(
 
         try
         {
-            await metadataStore.SaveUploadAsync(stored, originalFileName, context, cancellationToken);
+            _ = await metadataStore.SaveUploadAsync(stored, originalFileName, context, cancellationToken);
         }
         catch
         {

@@ -4,6 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <UserSecretsId>ThreeBooks.BookBackend.LoginService-7ed6349e-2a98-4f2f-84e0-fb56c33b0a14</UserSecretsId>
     <SkipLocalWindowsServiceAutomation Condition="'$(SkipLocalWindowsServiceAutomation)' == ''">false</SkipLocalWindowsServiceAutomation>
     <LocalWindowsServiceName>ThreeBooks.BookBackend.LoginService</LocalWindowsServiceName>

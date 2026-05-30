@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -126,8 +127,20 @@ public static class ServiceCollectionExtensions
                     []
                 }
             });
+
+            IncludeXmlComments(options, Assembly.GetExecutingAssembly());
         });
 
         return services;
+    }
+
+    private static void IncludeXmlComments(Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions options, Assembly assembly)
+    {
+        var xmlFileName = $"{assembly.GetName().Name}.xml";
+        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFileName);
+        if (File.Exists(xmlPath))
+        {
+            options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+        }
     }
 }
