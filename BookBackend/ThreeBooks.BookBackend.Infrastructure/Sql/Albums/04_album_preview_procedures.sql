@@ -1,5 +1,7 @@
 DROP PROCEDURE IF EXISTS usp_Album_FindProductId;
 DROP PROCEDURE IF EXISTS usp_Album_FindProjectByShareCode;
+DROP PROCEDURE IF EXISTS usp_Album_CountProjectsByUser;
+DROP PROCEDURE IF EXISTS usp_Album_ListProjectsByUser;
 DROP PROCEDURE IF EXISTS usp_Album_InsertProject;
 DROP PROCEDURE IF EXISTS usp_Album_InsertVersion;
 DROP PROCEDURE IF EXISTS usp_Album_UpdateProjectSharedVersion;
@@ -44,6 +46,42 @@ BEGIN
     FROM book_project
     WHERE share_code COLLATE utf8mb4_unicode_ci = p_share_code COLLATE utf8mb4_unicode_ci
     LIMIT 1;
+END $$
+
+CREATE PROCEDURE usp_Album_CountProjectsByUser(
+    IN p_user_id BIGINT
+)
+BEGIN
+    SELECT COUNT(*)
+    FROM book_project p
+    WHERE p.user_id = p_user_id;
+END $$
+
+CREATE PROCEDURE usp_Album_ListProjectsByUser(
+    IN p_user_id BIGINT,
+    IN p_page_size INT,
+    IN p_offset INT
+)
+BEGIN
+    SELECT
+        p.id AS ProjectId,
+        p.share_code AS ShareCode,
+        p.title AS Title,
+        p.subtitle AS Subtitle,
+        p.book_type AS BookType,
+        COALESCE(spu.spu_code, p.book_type) AS ProductCode,
+        p.is_public AS IsPublic,
+        p.page_count AS PageCount,
+        p.image_count AS ImageCount,
+        p.view_count AS ViewCount,
+        p.share_count AS ShareCount,
+        p.created_at AS CreatedAtUtc,
+        p.updated_at AS UpdatedAtUtc
+    FROM book_project p
+    LEFT JOIN catalog_product_spu spu ON spu.id = p.spu_id
+    WHERE p.user_id = p_user_id
+    ORDER BY p.updated_at DESC, p.id DESC
+    LIMIT p_page_size OFFSET p_offset;
 END $$
 
 CREATE PROCEDURE usp_Album_InsertProject(

@@ -1,0 +1,4 @@
+aron.ns.cloudflare.com
+colin.ns.cloudflare.com
+
+cloudflared.exe service install eyJhIjoiZjU5YjE2MGFkMTQ4MTBiMGMyNTcxNGZhMmU0NzlhNTQiLCJ0IjoiNjRhZGQ4NmEtYTU2ZS00NmVmLWI5NWMtNmI2ODQ2MWQxM2IwIiwicyI6Ik4yVmxNV0UxTkdJdFpHRXlNQzAwTmpaa0xXSmhNek10WmpkbVpETm1NR0UzWXpsbCJ9

@@ -4,11 +4,14 @@ using Dapper;
 using MySqlConnector;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Models;
+using ThreeBooks.BookBackend.Contracts.Common;
 
 namespace ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Albums;
 
 public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
 {
+    private const string CountProjectsByUserSql = "usp_Album_CountProjectsByUser";
+    private const string ListProjectsByUserSql = "usp_Album_ListProjectsByUser";
     private const string FindProductIdSql = "usp_Album_FindProductId";
     private const string FindProjectByShareCodeSql = "usp_Album_FindProjectByShareCode";
     private const string InsertProjectSql = "usp_Album_InsertProject";
@@ -38,6 +41,38 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
         ? throw new ArgumentException("Album database connection string is required.", nameof(connectionString))
         : connectionString;
+
+    public async Task<PagedResult<AlbumListItemQueryModel>> GetListAsync(
+        AlbumListFilter filter,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+
+        var totalCount = await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(
+                CountProjectsByUserSql,
+                new { p_user_id = filter.UserId },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        var rows = await connection.QueryAsync<AlbumListRow>(
+            new CommandDefinition(
+                ListProjectsByUserSql,
+                new
+                {
+                    p_user_id = filter.UserId,
+                    p_page_size = filter.PageSize,
+                    p_offset = (filter.PageNumber - 1) * filter.PageSize
+                },
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        return new PagedResult<AlbumListItemQueryModel>(
+            rows.Select(MapAlbumListItem).ToArray(),
+            filter.PageNumber,
+            filter.PageSize,
+            totalCount);
+    }
 
     public async Task<bool> ShareCodeExistsAsync(
         string shareCode,
@@ -574,6 +609,24 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         return string.Join(',', values);
     }
 
+    private static AlbumListItemQueryModel MapAlbumListItem(AlbumListRow row)
+    {
+        return new AlbumListItemQueryModel(
+            row.ProjectId,
+            NormalizeNullable(row.ShareCode),
+            row.Title,
+            row.Subtitle,
+            row.BookType,
+            NormalizeNullable(row.ProductCode),
+            row.IsPublic,
+            row.PageCount,
+            row.ImageCount,
+            row.ViewCount,
+            row.ShareCount,
+            row.CreatedAtUtc,
+            row.UpdatedAtUtc);
+    }
+
     private static AlbumPreviewPageSummaryModel MapPageSummary(PageSummaryRow row)
     {
         return new AlbumPreviewPageSummaryModel(
@@ -629,6 +682,35 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
     {
         var normalized = value?.Trim();
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private sealed class AlbumListRow
+    {
+        public long ProjectId { get; init; }
+
+        public string? ShareCode { get; init; }
+
+        public string Title { get; init; } = string.Empty;
+
+        public string? Subtitle { get; init; }
+
+        public string BookType { get; init; } = string.Empty;
+
+        public string? ProductCode { get; init; }
+
+        public bool IsPublic { get; init; }
+
+        public int PageCount { get; init; }
+
+        public int ImageCount { get; init; }
+
+        public long ViewCount { get; init; }
+
+        public long ShareCount { get; init; }
+
+        public DateTime CreatedAtUtc { get; init; }
+
+        public DateTime UpdatedAtUtc { get; init; }
     }
 
     private sealed record ProjectRow(

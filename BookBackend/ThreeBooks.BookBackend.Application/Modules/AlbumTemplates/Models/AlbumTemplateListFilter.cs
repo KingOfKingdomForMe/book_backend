@@ -56,6 +56,7 @@ public sealed record AlbumTemplateListItemQueryModel(
 	string? Category,
 	string? ThemeCode,
 	string SchemaVersion,
+	string JsonSource,
 	AlbumTemplateStoredFileReference? PreviewFile,
 	bool IsBuiltIn,
 	bool IsActive,

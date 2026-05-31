@@ -15,6 +15,12 @@ SET @sample_user_id = 9001;
 SET @sample_project_id = 9001;
 SET @sample_version_id = 900101;
 SET @sample_share_code = 'akqfpbdzr2goos';
+SET @sample_list_public_project_id = 9002;
+SET @sample_list_public_share_code = 'my-album-public-001';
+SET @sample_list_private_project_id = 9003;
+SET @sample_other_user_id = 9002;
+SET @sample_other_user_project_id = 9011;
+SET @sample_other_user_share_code = 'other-user-album-001';
 SET @sample_bucket = 'bookbackend-dev';
 SET @cover_hero_object_key = 'albums/akqfpbdzr2goos/assets/cover-hero.svg';
 SET @content_hero_object_key = 'albums/akqfpbdzr2goos/assets/content-01.svg';
@@ -146,20 +152,40 @@ SET @page_004_json = CAST(JSON_OBJECT(
     )
 ) AS CHAR CHARACTER SET utf8mb4);
 
-DELETE FROM book_project_view_log WHERE project_id = @sample_project_id;
-DELETE FROM book_project_share_log WHERE project_id = @sample_project_id;
+DELETE FROM book_project_view_log
+WHERE project_id IN (@sample_project_id, @sample_list_public_project_id, @sample_list_private_project_id, @sample_other_user_project_id);
+
+DELETE FROM book_project_share_log
+WHERE project_id IN (@sample_project_id, @sample_list_public_project_id, @sample_list_private_project_id, @sample_other_user_project_id);
+
 DELETE FROM book_project_version_page_asset
 WHERE version_page_id IN (
     SELECT id FROM (
-        SELECT id FROM book_project_version_page WHERE project_version_id = @sample_version_id
+        SELECT page.id
+        FROM book_project_version_page page
+        INNER JOIN book_project_version version ON version.id = page.project_version_id
+        WHERE version.project_id IN (@sample_project_id, @sample_list_public_project_id, @sample_list_private_project_id, @sample_other_user_project_id)
     ) AS page_ids
 );
-DELETE FROM book_project_version_page WHERE project_version_id = @sample_version_id;
 
-UPDATE book_project SET shared_version_id = NULL WHERE id = @sample_project_id;
+DELETE FROM book_project_version_page
+WHERE project_version_id IN (
+    SELECT id FROM (
+        SELECT id
+        FROM book_project_version
+        WHERE project_id IN (@sample_project_id, @sample_list_public_project_id, @sample_list_private_project_id, @sample_other_user_project_id)
+    ) AS version_ids
+);
 
-DELETE FROM book_project_version WHERE id = @sample_version_id;
-DELETE FROM book_project WHERE id = @sample_project_id;
+UPDATE book_project
+SET shared_version_id = NULL
+WHERE id IN (@sample_project_id, @sample_list_public_project_id, @sample_list_private_project_id, @sample_other_user_project_id);
+
+DELETE FROM book_project_version
+WHERE project_id IN (@sample_project_id, @sample_list_public_project_id, @sample_list_private_project_id, @sample_other_user_project_id);
+
+DELETE FROM book_project
+WHERE id IN (@sample_project_id, @sample_list_public_project_id, @sample_list_private_project_id, @sample_other_user_project_id);
 
 INSERT INTO identity_user (
     id,
@@ -190,6 +216,35 @@ VALUES (
     last_login_at = VALUES(last_login_at),
     updated_at = VALUES(updated_at);
 
+INSERT INTO identity_user (
+    id,
+    user_no,
+    phone,
+    password_hash,
+    status,
+    registered_at,
+    last_login_at,
+    created_at,
+    updated_at)
+VALUES (
+    @sample_other_user_id,
+    'U9002',
+    NULL,
+    NULL,
+    1,
+    '2026-05-01 09:00:00',
+    '2026-05-31 08:00:00',
+    '2026-05-01 09:00:00',
+    '2026-05-31 08:00:00'
+) ON DUPLICATE KEY UPDATE
+    user_no = VALUES(user_no),
+    phone = VALUES(phone),
+    password_hash = VALUES(password_hash),
+    status = VALUES(status),
+    registered_at = VALUES(registered_at),
+    last_login_at = VALUES(last_login_at),
+    updated_at = VALUES(updated_at);
+
 INSERT INTO identity_user_profile (
     user_id,
     nickname,
@@ -210,6 +265,35 @@ VALUES (
     NULL,
     '2026-04-20 10:00:00',
     '2026-04-20 10:00:00'
+) ON DUPLICATE KEY UPDATE
+    nickname = VALUES(nickname),
+    avatar_url = VALUES(avatar_url),
+    gender = VALUES(gender),
+    city = VALUES(city),
+    bio = VALUES(bio),
+    extra = VALUES(extra),
+    updated_at = VALUES(updated_at);
+
+INSERT INTO identity_user_profile (
+    user_id,
+    nickname,
+    avatar_url,
+    gender,
+    city,
+    bio,
+    extra,
+    created_at,
+    updated_at)
+VALUES (
+    @sample_other_user_id,
+    '列表隔离样例用户',
+    NULL,
+    0,
+    '上海',
+    'Used to verify album list ownership filtering',
+    NULL,
+    '2026-05-01 09:00:00',
+    '2026-05-31 08:00:00'
 ) ON DUPLICATE KEY UPDATE
     nickname = VALUES(nickname),
     avatar_url = VALUES(avatar_url),
@@ -568,3 +652,89 @@ SET view_count = 2,
     share_count = 1,
     updated_at = '2026-04-20 10:07:00'
 WHERE id = @sample_project_id;
+
+-- Additional sample albums for GET /api/albums list self-test
+INSERT INTO book_project (
+    id,
+    user_id,
+    book_type,
+    title,
+    subtitle,
+    status,
+    spu_id,
+    page_count,
+    image_count,
+    is_gift,
+    gift_target_name,
+    created_at,
+    updated_at,
+    share_code,
+    is_public,
+    shared_version_id,
+    shared_at,
+    view_count,
+    share_count)
+VALUES
+(
+    @sample_list_public_project_id,
+    @sample_user_id,
+    'balbum',
+    '五月旅行手记',
+    '公开列表样例',
+    4,
+    (SELECT id FROM catalog_product_spu WHERE spu_code = 'balbum' AND is_active = 1 LIMIT 1),
+    18,
+    26,
+    0,
+    NULL,
+    '2026-05-21 14:00:00',
+    '2026-05-31 09:30:00',
+    @sample_list_public_share_code,
+    1,
+    NULL,
+    '2026-05-31 09:30:00',
+    35,
+    6
+),
+(
+    @sample_list_private_project_id,
+    @sample_user_id,
+    'balbum',
+    '未公开草稿集',
+    '私有列表样例',
+    2,
+    (SELECT id FROM catalog_product_spu WHERE spu_code = 'balbum' AND is_active = 1 LIMIT 1),
+    9,
+    12,
+    0,
+    NULL,
+    '2026-05-30 18:20:00',
+    '2026-05-31 10:10:00',
+    NULL,
+    0,
+    NULL,
+    NULL,
+    0,
+    0
+),
+(
+    @sample_other_user_project_id,
+    @sample_other_user_id,
+    'balbum',
+    '别人的相册',
+    '用于校验用户隔离',
+    4,
+    (SELECT id FROM catalog_product_spu WHERE spu_code = 'balbum' AND is_active = 1 LIMIT 1),
+    12,
+    15,
+    0,
+    NULL,
+    '2026-05-28 08:00:00',
+    '2026-05-31 08:30:00',
+    @sample_other_user_share_code,
+    1,
+    NULL,
+    '2026-05-31 08:30:00',
+    9,
+    1
+);

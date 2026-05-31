@@ -1,11 +1,17 @@
 using ThreeBooks.BookBackend.Application.Common;
 using ThreeBooks.BookBackend.Contracts.Albums.Requests;
 using ThreeBooks.BookBackend.Contracts.Albums.Responses;
+using ThreeBooks.BookBackend.Contracts.Common;
 
 namespace ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
 
 public interface IAlbumService
 {
+    Task<PagedResult<AlbumListItemResponse>> GetListAsync(
+        ListAlbumsRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
     Task<CreateAlbumResponse> CreateAlbumAsync(
         CreateAlbumRequest request,
         RequestContext context,

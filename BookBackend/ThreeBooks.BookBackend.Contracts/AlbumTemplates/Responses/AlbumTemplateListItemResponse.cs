@@ -10,6 +10,7 @@ public sealed record AlbumTemplateListItemResponse(
     string? Category,
     string? ThemeCode,
     string SchemaVersion,
+    string JsonSource,
     string? PreviewUrl,
     bool IsBuiltIn,
     bool IsActive,

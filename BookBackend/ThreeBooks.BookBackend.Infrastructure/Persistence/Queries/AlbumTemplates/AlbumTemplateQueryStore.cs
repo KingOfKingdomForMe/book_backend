@@ -281,6 +281,7 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
             row.Category,
             row.ThemeCode,
             row.SchemaVersion,
+            row.JsonSource,
             BuildPreviewFile(row.PreviewBucket, row.PreviewObjectKey),
             row.IsBuiltIn,
             row.IsActive,
@@ -344,6 +345,8 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
 
         public string SchemaVersion { get; init; } = string.Empty;
 
+        public string JsonSource { get; init; } = string.Empty;
+
         public bool IsBuiltIn { get; init; }
 
         public bool IsActive { get; init; }
@@ -359,8 +362,6 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
 
     private sealed class AlbumTemplateDetailRow : AlbumTemplateListRow
     {
-        public string JsonSource { get; init; } = string.Empty;
-
         public long? PreviewFileId { get; init; }
 
         public long? CreatedByUserId { get; init; }

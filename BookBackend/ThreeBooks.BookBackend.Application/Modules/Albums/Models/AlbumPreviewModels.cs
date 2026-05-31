@@ -5,6 +5,26 @@ public sealed record AlbumStoredFileReference(
     string Bucket,
     string ObjectKey);
 
+public sealed record AlbumListFilter(
+    long UserId,
+    int PageNumber,
+    int PageSize);
+
+public sealed record AlbumListItemQueryModel(
+    long ProjectId,
+    string? ShareCode,
+    string Title,
+    string? Subtitle,
+    string BookType,
+    string? ProductCode,
+    bool IsPublic,
+    int PageCount,
+    int ImageCount,
+    long ViewCount,
+    long ShareCount,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
 public sealed record AlbumPreviewQueryModel(
     long ProjectId,
     string ShareCode,

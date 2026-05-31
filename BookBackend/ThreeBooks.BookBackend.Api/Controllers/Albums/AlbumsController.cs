@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
 using ThreeBooks.BookBackend.Contracts.Albums.Requests;
 using ThreeBooks.BookBackend.Contracts.Albums.Responses;
+using ThreeBooks.BookBackend.Contracts.Common;
 
 namespace ThreeBooks.BookBackend.Api.Controllers.Albums;
 
@@ -11,6 +12,34 @@ namespace ThreeBooks.BookBackend.Api.Controllers.Albums;
 [Route("api/albums")]
 public sealed class AlbumsController(IAlbumService albumService) : ApiControllerBase
 {
+    /// <summary>
+    /// 分页获取用户已创建的相册列表。
+    /// </summary>
+    /// <remarks>
+    /// 当前项目内相册归属仍按业务 `UserId` 查询。前端应传当前业务用户标识，而不是登录服务 JWT 中的 GUID 主键。
+    /// </remarks>
+    /// <param name="request">相册列表查询参数，包含业务用户标识和分页信息。</param>
+    /// <param name="cancellationToken">请求取消令牌。</param>
+    /// <response code="200">返回分页相册列表。</response>
+    /// <response code="400">查询参数非法。</response>
+    [HttpGet]
+    [ProducesResponseType<PagedResult<AlbumListItemResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResult<AlbumListItemResponse>>> GetListAsync(
+        [FromQuery] ListAlbumsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await albumService.GetListAsync(request, BuildRequestContext(), cancellationToken);
+            return Ok(response);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
     /// <summary>
     /// 创建新的用户相册。
     /// </summary>

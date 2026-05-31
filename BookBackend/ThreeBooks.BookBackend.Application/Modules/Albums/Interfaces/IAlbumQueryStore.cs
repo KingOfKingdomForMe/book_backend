@@ -1,9 +1,14 @@
 using ThreeBooks.BookBackend.Application.Modules.Albums.Models;
+using ThreeBooks.BookBackend.Contracts.Common;
 
 namespace ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
 
 public interface IAlbumQueryStore
 {
+    Task<PagedResult<AlbumListItemQueryModel>> GetListAsync(
+        AlbumListFilter filter,
+        CancellationToken cancellationToken);
+
     Task<bool> ShareCodeExistsAsync(
         string shareCode,
         CancellationToken cancellationToken);

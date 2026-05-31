@@ -281,6 +281,7 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
             item.Category,
             item.ThemeCode,
             item.SchemaVersion,
+            item.JsonSource,
             BuildOptionalProxyUrl(item.PreviewFile),
             item.IsBuiltIn,
             item.IsActive,

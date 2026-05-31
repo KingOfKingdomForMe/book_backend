@@ -48,6 +48,7 @@ BEGIN
         t.category AS Category,
         t.theme_code AS ThemeCode,
         t.schema_version AS SchemaVersion,
+        t.json_source AS JsonSource,
         t.is_built_in AS IsBuiltIn,
         t.is_active AS IsActive,
         t.sort_order AS SortOrder,

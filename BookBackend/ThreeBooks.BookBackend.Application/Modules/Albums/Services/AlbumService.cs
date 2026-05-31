@@ -8,6 +8,7 @@ using ThreeBooks.BookBackend.Application.Modules.Albums.Models;
 using ThreeBooks.BookBackend.Application.Modules.Files.Interfaces;
 using ThreeBooks.BookBackend.Contracts.Albums.Requests;
 using ThreeBooks.BookBackend.Contracts.Albums.Responses;
+using ThreeBooks.BookBackend.Contracts.Common;
 
 namespace ThreeBooks.BookBackend.Application.Modules.Albums.Services;
 
@@ -15,6 +16,12 @@ public sealed class AlbumService(
     IAlbumQueryStore queryStore,
     IFileStorageService fileStorageService) : IAlbumService
 {
+    private const int DefaultPageNumber = 1;
+
+    private const int DefaultPageSize = 20;
+
+    private const int MaxPageSize = 100;
+
     private const string DefaultAlbumBookType = "balbum";
 
     private const int DefaultAlbumStatus = 1;
@@ -38,6 +45,27 @@ public sealed class AlbumService(
         "qrcode",
         "weibo"
     };
+
+    public async Task<PagedResult<AlbumListItemResponse>> GetListAsync(
+        ListAlbumsRequest request,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var filter = new AlbumListFilter(
+            NormalizePositiveId(request.UserId, nameof(request.UserId)),
+            NormalizeListPageNumber(request.PageNumber),
+            NormalizeListPageSize(request.PageSize));
+
+        var result = await queryStore.GetListAsync(filter, cancellationToken);
+
+        return new PagedResult<AlbumListItemResponse>(
+            result.Items.Select(MapListItem).ToArray(),
+            result.PageNumber,
+            result.PageSize,
+            result.TotalCount);
+    }
 
     public async Task<CreateAlbumResponse> CreateAlbumAsync(
         CreateAlbumRequest request,
@@ -282,6 +310,25 @@ public sealed class AlbumService(
             cancellationToken);
     }
 
+    private static AlbumListItemResponse MapListItem(AlbumListItemQueryModel item)
+    {
+        return new AlbumListItemResponse(
+            item.ProjectId,
+            item.ShareCode,
+            item.Title,
+            item.Subtitle,
+            item.BookType,
+            ResolveProductCode(item.ProductCode, item.BookType),
+            item.IsPublic,
+            item.PageCount,
+            item.ImageCount,
+            item.ViewCount,
+            item.ShareCount,
+            item.IsPublic && !string.IsNullOrWhiteSpace(item.ShareCode) ? BuildShareUrl(item.ShareCode) : null,
+            item.CreatedAtUtc,
+            item.UpdatedAtUtc);
+    }
+
     private static string NormalizeShareCode(string shareCode)
     {
         var normalized = shareCode?.Trim().ToLowerInvariant();
@@ -448,6 +495,21 @@ public sealed class AlbumService(
         }
 
         return value;
+    }
+
+    private static int NormalizeListPageNumber(int value)
+    {
+        return value < 1 ? DefaultPageNumber : value;
+    }
+
+    private static int NormalizeListPageSize(int value)
+    {
+        if (value < 1)
+        {
+            return DefaultPageSize;
+        }
+
+        return value > MaxPageSize ? MaxPageSize : value;
     }
 
     private static int NormalizeNonNegative(int value, string parameterName)
