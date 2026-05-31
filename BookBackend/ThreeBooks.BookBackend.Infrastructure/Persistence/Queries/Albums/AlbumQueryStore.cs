@@ -92,6 +92,7 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
 
     public async Task<AlbumCreateResultModel> CreateAlbumAsync(
         AlbumCreateCommandModel command,
+        AlbumPagesWriteCommandModel? pagesCommand,
         CancellationToken cancellationToken)
     {
         await using var connection = await CreateOpenConnectionAsync(cancellationToken);
@@ -187,6 +188,17 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
 
+        AlbumPagesWriteResultModel? pagesResult = null;
+        if (pagesCommand is not null)
+        {
+            pagesResult = await WritePagesAsync(
+                connection,
+                transaction,
+                new ProjectWriteRow(projectId, command.ShareCode, versionId, command.IsPublic),
+                pagesCommand,
+                cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         return new AlbumCreateResultModel(
@@ -198,8 +210,8 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             command.BookType,
             command.ProductCode,
             command.IsPublic,
-            0,
-            0);
+            pagesResult?.PageCount ?? 0,
+            pagesResult?.ImageCount ?? 0);
     }
 
     public async Task<AlbumPagesWriteResultModel?> SavePagesAsync(
@@ -221,6 +233,25 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         if (projectRow is null || !projectRow.SharedVersionId.HasValue)
         {
             return null;
+        }
+
+        var result = await WritePagesAsync(connection, transaction, projectRow, command, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return result;
+    }
+
+    private async Task<AlbumPagesWriteResultModel> WritePagesAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        ProjectWriteRow projectRow,
+        AlbumPagesWriteCommandModel command,
+        CancellationToken cancellationToken)
+    {
+        if (!projectRow.SharedVersionId.HasValue)
+        {
+            throw new InvalidOperationException("Project must have a shared version before pages can be written.");
         }
 
         var fileIds = new HashSet<long>();
@@ -396,8 +427,6 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                 transaction: transaction,
                 commandType: CommandType.StoredProcedure,
                 cancellationToken: cancellationToken));
-
-        await transaction.CommitAsync(cancellationToken);
 
         return new AlbumPagesWriteResultModel(
             projectRow.ProjectId,

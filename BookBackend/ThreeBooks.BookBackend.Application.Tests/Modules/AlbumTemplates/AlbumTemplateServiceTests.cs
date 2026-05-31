@@ -50,9 +50,98 @@ public sealed class AlbumTemplateServiceTests
         Assert.Equal(jsonSource, item.JsonSource);
     }
 
+    [Fact]
+    public async Task GetListAsync_ReturnsEmptyForCoverTemplatePageType()
+    {
+        var service = new AlbumTemplateService(new FakeAlbumTemplateQueryStore());
+
+        var response = await service.GetListAsync(
+            new ListAlbumTemplatesRequest(null, PageType: "cover-template"),
+            Context,
+            CancellationToken.None);
+
+        Assert.Empty(response.Items);
+        Assert.Equal(0, response.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_ReturnsNullForCoverTemplate()
+    {
+        var queryStore = new FakeAlbumTemplateQueryStore
+        {
+            GetDetailHandler = templateCode => Task.FromResult<AlbumTemplateDetailQueryModel?>(new AlbumTemplateDetailQueryModel(
+                9,
+                templateCode,
+                "Generated Cover",
+                "cover",
+                null,
+                "cover-template",
+                null,
+                null,
+                "1.0",
+                "{\"fields\":[]}",
+                null,
+                null,
+                null,
+                true,
+                true,
+                0,
+                DateTime.UtcNow,
+                DateTime.UtcNow))
+        };
+
+        var service = new AlbumTemplateService(queryStore);
+
+        var response = await service.GetDetailAsync("generated-cover-story-default", Context, CancellationToken.None);
+
+        Assert.Null(response);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_NormalizesTemplateCodeAndReturnsTrue()
+    {
+        string? deletedTemplateCode = null;
+        var queryStore = new FakeAlbumTemplateQueryStore
+        {
+            DeleteHandler = templateCode =>
+            {
+                deletedTemplateCode = templateCode;
+                return Task.FromResult(true);
+            }
+        };
+
+        var service = new AlbumTemplateService(queryStore);
+
+        var deleted = await service.DeleteAsync(" Story-Template ", Context, CancellationToken.None);
+
+        Assert.True(deleted);
+        Assert.Equal("story-template", deletedTemplateCode);
+    }
+
+    [Fact]
+    public async Task DeleteAllAsync_ReturnsDeletedCount()
+    {
+        var queryStore = new FakeAlbumTemplateQueryStore
+        {
+            DeleteAllHandler = () => Task.FromResult(5)
+        };
+
+        var service = new AlbumTemplateService(queryStore);
+
+        var deletedCount = await service.DeleteAllAsync(Context, CancellationToken.None);
+
+        Assert.Equal(5, deletedCount);
+    }
+
     private sealed class FakeAlbumTemplateQueryStore : IAlbumTemplateQueryStore
     {
         public Func<AlbumTemplateListFilter, Task<PagedResult<AlbumTemplateListItemQueryModel>>>? GetListHandler { get; init; }
+
+        public Func<string, Task<AlbumTemplateDetailQueryModel?>>? GetDetailHandler { get; init; }
+
+        public Func<string, Task<bool>>? DeleteHandler { get; init; }
+
+        public Func<Task<int>>? DeleteAllHandler { get; init; }
 
         public Task<PagedResult<AlbumTemplateListItemQueryModel>> GetListAsync(
             AlbumTemplateListFilter filter,
@@ -67,7 +156,9 @@ public sealed class AlbumTemplateServiceTests
             string templateCode,
             CancellationToken cancellationToken)
         {
-            throw new NotSupportedException();
+            return GetDetailHandler is null
+                ? Task.FromResult<AlbumTemplateDetailQueryModel?>(null)
+                : GetDetailHandler(templateCode);
         }
 
         public Task<AlbumTemplateCreateResultModel> CreateAsync(
@@ -83,6 +174,22 @@ public sealed class AlbumTemplateServiceTests
             CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
+        }
+
+        public Task<bool> DeleteAsync(
+            string templateCode,
+            CancellationToken cancellationToken)
+        {
+            return DeleteHandler is null
+                ? Task.FromResult(false)
+                : DeleteHandler(templateCode);
+        }
+
+        public Task<int> DeleteAllAsync(CancellationToken cancellationToken)
+        {
+            return DeleteAllHandler is null
+                ? Task.FromResult(0)
+                : DeleteAllHandler();
         }
     }
 }

@@ -5,6 +5,8 @@ DROP PROCEDURE IF EXISTS usp_AlbumTemplates_FindPreviewFile;
 DROP PROCEDURE IF EXISTS usp_AlbumTemplates_FindCreator;
 DROP PROCEDURE IF EXISTS usp_AlbumTemplates_Create;
 DROP PROCEDURE IF EXISTS usp_AlbumTemplates_Update;
+DROP PROCEDURE IF EXISTS usp_AlbumTemplates_Delete;
+DROP PROCEDURE IF EXISTS usp_AlbumTemplates_DeleteAll;
 
 DELIMITER $$
 
@@ -23,7 +25,8 @@ BEGIN
                 OR t.name COLLATE utf8mb4_unicode_ci LIKE CONCAT('%', p_keyword, '%') COLLATE utf8mb4_unicode_ci
                 OR t.description COLLATE utf8mb4_unicode_ci LIKE CONCAT('%', p_keyword, '%') COLLATE utf8mb4_unicode_ci)
             AND (p_book_type IS NULL OR t.book_type COLLATE utf8mb4_unicode_ci = p_book_type COLLATE utf8mb4_unicode_ci)
-            AND (p_page_type IS NULL OR t.page_type COLLATE utf8mb4_unicode_ci = p_page_type COLLATE utf8mb4_unicode_ci)
+            AND ((p_page_type IS NULL AND t.page_type COLLATE utf8mb4_unicode_ci <> 'cover-template')
+                OR (p_page_type IS NOT NULL AND t.page_type COLLATE utf8mb4_unicode_ci = p_page_type COLLATE utf8mb4_unicode_ci))
             AND (p_category IS NULL OR t.category COLLATE utf8mb4_unicode_ci = p_category COLLATE utf8mb4_unicode_ci)
       AND (p_is_active IS NULL OR t.is_active = p_is_active);
 END $$
@@ -62,7 +65,8 @@ BEGIN
                 OR t.name COLLATE utf8mb4_unicode_ci LIKE CONCAT('%', p_keyword, '%') COLLATE utf8mb4_unicode_ci
                 OR t.description COLLATE utf8mb4_unicode_ci LIKE CONCAT('%', p_keyword, '%') COLLATE utf8mb4_unicode_ci)
             AND (p_book_type IS NULL OR t.book_type COLLATE utf8mb4_unicode_ci = p_book_type COLLATE utf8mb4_unicode_ci)
-            AND (p_page_type IS NULL OR t.page_type COLLATE utf8mb4_unicode_ci = p_page_type COLLATE utf8mb4_unicode_ci)
+                        AND ((p_page_type IS NULL AND t.page_type COLLATE utf8mb4_unicode_ci <> 'cover-template')
+                                OR (p_page_type IS NOT NULL AND t.page_type COLLATE utf8mb4_unicode_ci = p_page_type COLLATE utf8mb4_unicode_ci))
             AND (p_category IS NULL OR t.category COLLATE utf8mb4_unicode_ci = p_category COLLATE utf8mb4_unicode_ci)
       AND (p_is_active IS NULL OR t.is_active = p_is_active)
     ORDER BY t.sort_order ASC, t.updated_at DESC, t.id DESC
@@ -202,6 +206,56 @@ BEGIN
         sort_order = p_sort_order,
         updated_at = CURRENT_TIMESTAMP
     WHERE template_code COLLATE utf8mb4_unicode_ci = p_template_code COLLATE utf8mb4_unicode_ci;
+END $$
+
+CREATE PROCEDURE usp_AlbumTemplates_Delete(
+        IN p_template_code VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+)
+BEGIN
+        DELETE dat
+        FROM default_album_template dat
+        INNER JOIN album_content_template t ON t.id = dat.template_id
+        WHERE t.template_code COLLATE utf8mb4_unicode_ci = p_template_code COLLATE utf8mb4_unicode_ci
+            AND t.page_type COLLATE utf8mb4_unicode_ci <> 'cover-template';
+
+        DELETE a
+        FROM default_album a
+        LEFT JOIN default_album_template dat ON dat.default_album_id = a.id
+        WHERE dat.default_album_id IS NULL;
+
+        DELETE FROM album_content_template
+        WHERE template_code COLLATE utf8mb4_unicode_ci = p_template_code COLLATE utf8mb4_unicode_ci
+            AND page_type COLLATE utf8mb4_unicode_ci <> 'cover-template';
+
+        DELETE a
+        FROM default_album a
+        LEFT JOIN default_album_template dat ON dat.default_album_id = a.id
+        WHERE dat.default_album_id IS NULL;
+
+        SELECT ROW_COUNT() AS AffectedRows;
+END $$
+
+CREATE PROCEDURE usp_AlbumTemplates_DeleteAll()
+BEGIN
+        DELETE dat
+        FROM default_album_template dat
+        INNER JOIN album_content_template t ON t.id = dat.template_id
+        WHERE t.page_type COLLATE utf8mb4_unicode_ci <> 'cover-template';
+
+    DELETE a
+    FROM default_album a
+    LEFT JOIN default_album_template dat ON dat.default_album_id = a.id
+    WHERE dat.default_album_id IS NULL;
+
+        DELETE FROM album_content_template
+        WHERE page_type COLLATE utf8mb4_unicode_ci <> 'cover-template';
+
+    DELETE a
+    FROM default_album a
+    LEFT JOIN default_album_template dat ON dat.default_album_id = a.id
+    WHERE dat.default_album_id IS NULL;
+
+        SELECT ROW_COUNT() AS AffectedRows;
 END $$
 
 DELIMITER ;

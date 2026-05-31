@@ -27,4 +27,13 @@ public interface IAlbumTemplateService
         UpdateAlbumTemplateRequest request,
         RequestContext context,
         CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(
+        string templateCode,
+        RequestContext context,
+        CancellationToken cancellationToken);
+
+    Task<int> DeleteAllAsync(
+        RequestContext context,
+        CancellationToken cancellationToken);
 }

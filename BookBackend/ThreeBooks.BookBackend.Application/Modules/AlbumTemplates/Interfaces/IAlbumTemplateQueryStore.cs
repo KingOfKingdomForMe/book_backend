@@ -21,4 +21,11 @@ public interface IAlbumTemplateQueryStore
         string templateCode,
         AlbumTemplateUpdateCommandModel command,
         CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(
+        string templateCode,
+        CancellationToken cancellationToken);
+
+    Task<int> DeleteAllAsync(
+        CancellationToken cancellationToken);
 }

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Net.Http.Headers;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using ThreeBooks.BookBackend.Api.Authorization;
@@ -11,6 +12,8 @@ using ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Services;
 using ThreeBooks.BookBackend.Application.Modules.Catalogs.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.Catalogs.Services;
+using ThreeBooks.BookBackend.Application.Modules.DefaultAlbums.Interfaces;
+using ThreeBooks.BookBackend.Application.Modules.DefaultAlbums.Services;
 using ThreeBooks.BookBackend.Application.Modules.CoverTemplates.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.CoverTemplates.Services;
 using ThreeBooks.BookBackend.Application.Modules.Files.Interfaces;
@@ -23,6 +26,7 @@ using ThreeBooks.BookBackend.Infrastructure.Persistence.Files;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.AlbumTemplates;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Albums;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Catalogs;
+using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.DefaultAlbums;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Files;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Orders;
 using ThreeBooks.BookBackend.Infrastructure.Persistence.Queries.Unboxings;
@@ -39,8 +43,10 @@ public static class ServiceCollectionExtensions
         services.AddEndpointsApiExplorer();
 
         services.Configure<ApiJwtOptions>(configuration.GetSection(ApiJwtOptions.SectionName));
+        services.Configure<DevelopmentSwaggerBearerOptions>(configuration.GetSection(DevelopmentSwaggerBearerOptions.SectionName));
 
         var jwtOptions = configuration.GetSection(ApiJwtOptions.SectionName).Get<ApiJwtOptions>() ?? new ApiJwtOptions();
+        var developmentSwaggerBearerOptions = configuration.GetSection(DevelopmentSwaggerBearerOptions.SectionName).Get<DevelopmentSwaggerBearerOptions>() ?? new DevelopmentSwaggerBearerOptions();
         if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey) || jwtOptions.SigningKey.Length < 32)
         {
             throw new InvalidOperationException("Jwt:SigningKey must be configured with at least 32 characters.");
@@ -63,6 +69,32 @@ public static class ServiceCollectionExtensions
                     ClockSkew = TimeSpan.FromMinutes(1),
                     NameClaimType = ClaimTypes.Name,
                     RoleClaimType = ClaimTypes.Role
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        if (!developmentSwaggerBearerOptions.IsEnabled)
+                        {
+                            return Task.CompletedTask;
+                        }
+
+                        var authorizationHeader = context.Request.Headers[HeaderNames.Authorization].ToString();
+                        if (!authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return Task.CompletedTask;
+                        }
+
+                        var providedToken = authorizationHeader["Bearer ".Length..].Trim();
+                        if (!string.Equals(providedToken, developmentSwaggerBearerOptions.Token.Trim(), StringComparison.Ordinal))
+                        {
+                            return Task.CompletedTask;
+                        }
+
+                        context.Token = DevelopmentSwaggerBearerTokenFactory.CreateJwt(jwtOptions, developmentSwaggerBearerOptions);
+                        return Task.CompletedTask;
+                    }
                 };
             });
 
@@ -102,7 +134,9 @@ public static class ServiceCollectionExtensions
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 In = ParameterLocation.Header,
-                Description = "Input a JWT access token using the Bearer scheme.",
+                Description = DevelopmentSwaggerBearerTokenFactory.BuildSwaggerSecurityDescription(
+                    "Input a JWT access token using the Bearer scheme.",
+                    developmentSwaggerBearerOptions),
                 Name = "Authorization",
                 Type = SecuritySchemeType.Http,
                 BearerFormat = "JWT",
@@ -130,6 +164,10 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IAlbumTemplateService, AlbumTemplateService>();
         services.AddScoped<IAlbumTemplateQueryStore>(_ => new AlbumTemplateQueryStore(
+            configuration.GetConnectionString("BookBackendDb")
+            ?? throw new InvalidOperationException("ConnectionStrings:BookBackendDb is required.")));
+        services.AddScoped<IDefaultAlbumService, DefaultAlbumService>();
+        services.AddScoped<IDefaultAlbumQueryStore>(_ => new DefaultAlbumQueryStore(
             configuration.GetConnectionString("BookBackendDb")
             ?? throw new InvalidOperationException("ConnectionStrings:BookBackendDb is required.")));
         services.AddScoped<ICoverTemplateService, CoverTemplateService>();

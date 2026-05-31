@@ -11,6 +11,7 @@ public static class ApplicationInitializationExtensions
         "Files",
         "Catalogs",
         "AlbumTemplates",
+        "DefaultAlbums",
         "Albums",
         "Orders",
         "Unboxings"
@@ -131,6 +132,12 @@ public static class ApplicationInitializationExtensions
         }
 
         if (normalizedPath.StartsWith("AlbumTemplates/Procedures/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (normalizedPath.StartsWith("DefaultAlbums/", StringComparison.OrdinalIgnoreCase)
+            && !normalizedPath.Contains("seed", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

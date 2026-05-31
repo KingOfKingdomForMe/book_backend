@@ -132,4 +132,50 @@ public sealed class AdminAlbumTemplatesController(IAlbumTemplateService albumTem
             return BadRequest(exception.Message);
         }
     }
+
+    /// <summary>
+    /// 删除指定后台相册模板。
+    /// </summary>
+    /// <remarks>
+    /// 仅删除相册模板模块管理的模板记录，并同步清理默认相册中的模板关联。
+    /// </remarks>
+    /// <param name="templateCode">模板编码。</param>
+    /// <param name="cancellationToken">请求取消令牌。</param>
+    /// <response code="204">删除成功。</response>
+    /// <response code="404">模板不存在。</response>
+    /// <response code="400">模板编码非法。</response>
+    [HttpDelete("{templateCode}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DeleteAsync(
+        string templateCode,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var deleted = await albumTemplateService.DeleteAsync(templateCode, BuildRequestContext(), cancellationToken);
+            return deleted ? NoContent() : NotFound();
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
+    /// <summary>
+    /// 删除全部后台相册模板。
+    /// </summary>
+    /// <remarks>
+    /// 仅清理相册模板模块管理的模板记录，并同步移除默认相册中的模板关联；封面模板由独立接口管理，不会在这里被删除。
+    /// </remarks>
+    /// <param name="cancellationToken">请求取消令牌。</param>
+    /// <response code="204">删除完成。</response>
+    [HttpDelete]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteAllAsync(CancellationToken cancellationToken)
+    {
+        await albumTemplateService.DeleteAllAsync(BuildRequestContext(), cancellationToken);
+        return NoContent();
+    }
 }

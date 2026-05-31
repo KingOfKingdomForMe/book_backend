@@ -1,6 +1,16 @@
-@ThreeBooks.BookBackend.Api_HostAddress = http://localhost:5146
+@ThreeBooks.BookBackend.Api_HostAddress = http://localhost:5281
 
 GET {{ThreeBooks.BookBackend.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+GET {{ThreeBooks.BookBackend.Api_HostAddress}}/api/default-albums
+Accept: application/json
+
+###
+
+GET {{ThreeBooks.BookBackend.Api_HostAddress}}/api/default-albums/default-growth-memory
 Accept: application/json
 
 ###

@@ -44,12 +44,12 @@ public sealed class AlbumsController(IAlbumService albumService) : ApiController
     /// 创建新的用户相册。
     /// </summary>
     /// <remarks>
-    /// 适用于用户首次生成作品集。若未显式传入 `ShareCode`，通常建议由服务端生成，避免客户端自行维护冲突风险。
+    /// 适用于用户首次生成作品集。若未显式传入 `ShareCode`，通常建议由服务端生成，避免客户端自行维护冲突风险。若同时传入 `Pages`，服务端会在同一创建流程中落库这些页面内容；若未传 `Pages` 但传入 `ProductCode`，服务端会尝试按该产品绑定的默认相册初始化页面。
     /// </remarks>
-    /// <param name="request">创建相册请求体，包含所属用户、标题、副标题和公开状态等信息。</param>
+    /// <param name="request">创建相册请求体，包含所属用户、标题、副标题、所选产品以及可选的初始页面内容。</param>
     /// <param name="cancellationToken">请求取消令牌。</param>
     /// <response code="201">相册创建成功。</response>
-    /// <response code="400">请求参数不合法，例如标题缺失或用户标识非法。</response>
+    /// <response code="400">请求参数不合法，例如标题缺失、用户标识非法，或所选产品没有配置可用的默认相册。</response>
     [HttpPost]
     [ProducesResponseType<CreateAlbumResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

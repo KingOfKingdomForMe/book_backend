@@ -300,6 +300,18 @@ public sealed class CoverTemplateServiceTests
                 ? Task.FromResult<AlbumTemplateDetailQueryModel?>(null)
                 : UpdateHandler(templateCode, command);
         }
+
+        public Task<bool> DeleteAsync(
+            string templateCode,
+            CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<int> DeleteAllAsync(CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class FakeFileObjectStore : IFileObjectStore

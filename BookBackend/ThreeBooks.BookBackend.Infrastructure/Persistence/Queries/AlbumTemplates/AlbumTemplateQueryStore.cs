@@ -16,6 +16,8 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
     private const string FindCreatorSql = "usp_AlbumTemplates_FindCreator";
     private const string InsertSql = "usp_AlbumTemplates_Create";
     private const string UpdateSql = "usp_AlbumTemplates_Update";
+    private const string DeleteSql = "usp_AlbumTemplates_Delete";
+    private const string DeleteAllSql = "usp_AlbumTemplates_DeleteAll";
     private const string LastInsertIdSql = "usp_Common_GetLastInsertId";
 
     private readonly string _connectionString = string.IsNullOrWhiteSpace(connectionString)
@@ -260,6 +262,42 @@ public sealed class AlbumTemplateQueryStore(string connectionString) : IAlbumTem
 
         await transaction.CommitAsync(cancellationToken);
         return MapDetail(updated);
+    }
+
+    public async Task<bool> DeleteAsync(
+        string templateCode,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var deletedCount = await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(
+                DeleteSql,
+                new { p_template_code = templateCode },
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return deletedCount > 0;
+    }
+
+    public async Task<int> DeleteAllAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await CreateOpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var deletedCount = await connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(
+                DeleteAllSql,
+                transaction: transaction,
+                commandType: CommandType.StoredProcedure,
+                cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return deletedCount;
     }
 
     private async Task<MySqlConnection> CreateOpenConnectionAsync(CancellationToken cancellationToken)

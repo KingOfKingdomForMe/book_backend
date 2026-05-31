@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using ThreeBooks.BookBackend.Application.Common;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Interfaces;
 using ThreeBooks.BookBackend.Application.Modules.Albums.Models;
+using ThreeBooks.BookBackend.Application.Modules.DefaultAlbums.Interfaces;
+using ThreeBooks.BookBackend.Application.Modules.DefaultAlbums.Models;
 using ThreeBooks.BookBackend.Application.Modules.Files.Interfaces;
 using ThreeBooks.BookBackend.Contracts.Albums.Requests;
 using ThreeBooks.BookBackend.Contracts.Albums.Responses;
@@ -14,7 +16,8 @@ namespace ThreeBooks.BookBackend.Application.Modules.Albums.Services;
 
 public sealed class AlbumService(
     IAlbumQueryStore queryStore,
-    IFileStorageService fileStorageService) : IAlbumService
+    IFileStorageService fileStorageService,
+    IDefaultAlbumQueryStore defaultAlbumQueryStore) : IAlbumService
 {
     private const int DefaultPageNumber = 1;
 
@@ -78,6 +81,17 @@ public sealed class AlbumService(
         var title = NormalizeRequiredText(request.Title, nameof(request.Title), 256);
         var subtitle = NormalizeOptionalText(request.Subtitle, 256, nameof(request.Subtitle));
         var providedShareCode = NormalizeOptionalShareCode(request.ShareCode);
+        var normalizedProductCode = string.IsNullOrWhiteSpace(request.ProductCode)
+            ? DefaultAlbumBookType
+            : NormalizeCode(request.ProductCode, nameof(request.ProductCode), 32);
+        var pagesCommand = BuildOptionalPagesWriteCommand(request.Pages);
+        if (pagesCommand is null && !string.IsNullOrWhiteSpace(request.ProductCode))
+        {
+            pagesCommand = await BuildDefaultAlbumPagesWriteCommandAsync(
+                normalizedProductCode,
+                nameof(request.ProductCode),
+                cancellationToken);
+        }
 
         AlbumCreateCommandModel BuildCommand(string shareCode)
         {
@@ -86,8 +100,8 @@ public sealed class AlbumService(
                 shareCode,
                 title,
                 subtitle,
-                DefaultAlbumBookType,
-                DefaultAlbumBookType,
+                normalizedProductCode,
+                normalizedProductCode,
                 DefaultAlbumStatus,
                 request.IsPublic,
                 DefaultAlbumVersionNo,
@@ -96,8 +110,8 @@ public sealed class AlbumService(
         }
 
         var result = providedShareCode is null
-            ? await CreateAlbumWithGeneratedShareCodeAsync(BuildCommand, cancellationToken)
-            : await queryStore.CreateAlbumAsync(BuildCommand(providedShareCode), cancellationToken);
+            ? await CreateAlbumWithGeneratedShareCodeAsync(BuildCommand, pagesCommand, cancellationToken)
+            : await queryStore.CreateAlbumAsync(BuildCommand(providedShareCode), pagesCommand, cancellationToken);
 
         return new CreateAlbumResponse(
             result.ProjectId,
@@ -108,6 +122,7 @@ public sealed class AlbumService(
 
     private async Task<AlbumCreateResultModel> CreateAlbumWithGeneratedShareCodeAsync(
         Func<string, AlbumCreateCommandModel> buildCommand,
+        AlbumPagesWriteCommandModel? pagesCommand,
         CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < MaxShareCodeGenerationAttempts; attempt++)
@@ -120,7 +135,7 @@ public sealed class AlbumService(
 
             try
             {
-                return await queryStore.CreateAlbumAsync(buildCommand(generatedShareCode), cancellationToken);
+                return await queryStore.CreateAlbumAsync(buildCommand(generatedShareCode), pagesCommand, cancellationToken);
             }
             catch (ArgumentException exception) when (IsShareCodeConflict(exception))
             {
@@ -137,21 +152,9 @@ public sealed class AlbumService(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(request.Pages);
 
         var normalizedShareCode = NormalizeShareCode(shareCode);
-        var pageNumbers = new HashSet<int>();
-
-        var pages = request.Pages
-            .Select(page => BuildPageWriteCommand(page, pageNumbers))
-            .OrderBy(page => page.SortOrder)
-            .ThenBy(page => page.PageNo)
-            .ToArray();
-
-        var result = await queryStore.SavePagesAsync(
-            normalizedShareCode,
-            new AlbumPagesWriteCommandModel(pages, ResolveSnapshotSchemaVersion(pages)),
-            cancellationToken);
+        var result = await queryStore.SavePagesAsync(normalizedShareCode, BuildPagesWriteCommand(request.Pages), cancellationToken);
 
         if (result is null)
         {
@@ -420,6 +423,72 @@ public sealed class AlbumService(
             NormalizeNullableDimension(request.PageHeight, nameof(request.PageHeight)),
             schemaVersion,
             images);
+    }
+
+    private static AlbumPagesWriteCommandModel BuildPagesWriteCommand(IReadOnlyCollection<SaveAlbumPageRequest>? requestPages)
+    {
+        ArgumentNullException.ThrowIfNull(requestPages);
+
+        var pageNumbers = new HashSet<int>();
+        var pages = requestPages
+            .Select(page => BuildPageWriteCommand(page, pageNumbers))
+            .OrderBy(page => page.SortOrder)
+            .ThenBy(page => page.PageNo)
+            .ToArray();
+
+        return new AlbumPagesWriteCommandModel(pages, ResolveSnapshotSchemaVersion(pages));
+    }
+
+    private static AlbumPagesWriteCommandModel? BuildOptionalPagesWriteCommand(IReadOnlyCollection<SaveAlbumPageRequest>? requestPages)
+    {
+        return requestPages is null ? null : BuildPagesWriteCommand(requestPages);
+    }
+
+    private async Task<AlbumPagesWriteCommandModel> BuildDefaultAlbumPagesWriteCommandAsync(
+        string productCode,
+        string parameterName,
+        CancellationToken cancellationToken)
+    {
+        var defaultAlbum = await defaultAlbumQueryStore.GetActiveByProductCodeAsync(productCode, cancellationToken);
+        if (defaultAlbum is null)
+        {
+            throw new ArgumentException("ProductCode does not have an active default album.", parameterName);
+        }
+
+        if (defaultAlbum.Templates.Count == 0)
+        {
+            throw new ArgumentException("ProductCode default album does not contain any templates.", parameterName);
+        }
+
+        var pages = defaultAlbum.Templates
+            .OrderBy(template => template.SortOrder)
+            .ThenBy(template => template.ItemId)
+            .Select((template, index) => new AlbumPageWriteCommandModel(
+                index + 1,
+                ResolveDefaultAlbumPageLabel(template.Name, index + 1),
+                NormalizeCode(template.PageType, nameof(template.PageType), 32, "content"),
+                NormalizeNonNegative(template.SortOrder, nameof(template.SortOrder)),
+                NormalizeRequiredJsonSource(template.JsonSource, nameof(template.JsonSource)),
+                null,
+                null,
+                null,
+                null,
+                NormalizeVersion(template.SchemaVersion),
+                Array.Empty<AlbumPageAssetWriteModel>()))
+            .ToArray();
+
+        return new AlbumPagesWriteCommandModel(pages, ResolveSnapshotSchemaVersion(pages));
+    }
+
+    private static string ResolveDefaultAlbumPageLabel(string? templateName, int pageNo)
+    {
+        var normalized = templateName?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return $"第{pageNo}页";
+        }
+
+        return normalized.Length <= 64 ? normalized : normalized[..64];
     }
 
     private static string ResolvePageLabel(string? pageLabel, int pageNo)

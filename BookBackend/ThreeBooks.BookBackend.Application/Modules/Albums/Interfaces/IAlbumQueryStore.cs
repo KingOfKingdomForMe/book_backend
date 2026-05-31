@@ -15,6 +15,7 @@ public interface IAlbumQueryStore
 
     Task<AlbumCreateResultModel> CreateAlbumAsync(
         AlbumCreateCommandModel command,
+        AlbumPagesWriteCommandModel? pagesCommand,
         CancellationToken cancellationToken);
 
     Task<AlbumPagesWriteResultModel?> SavePagesAsync(

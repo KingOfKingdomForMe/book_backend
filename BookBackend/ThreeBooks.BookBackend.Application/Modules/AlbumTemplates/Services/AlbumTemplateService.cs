@@ -15,6 +15,7 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
     private const string DefaultSchemaVersion = "2.0";
+    private const string CoverTemplatePageType = "cover-template";
 
     private static readonly Regex CodePattern = new("^[a-z0-9_-]{2,64}$", RegexOptions.Compiled);
 
@@ -25,10 +26,20 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var pageType = NormalizeOptionalCode(request.PageType, nameof(request.PageType), 32);
+        if (IsCoverTemplatePageType(pageType))
+        {
+            return new PagedResult<AlbumTemplateListItemResponse>(
+                [],
+                NormalizePageNumber(request.PageNumber),
+                NormalizePageSize(request.PageSize),
+                0);
+        }
+
         var filter = new AlbumTemplateListFilter(
             NormalizeKeyword(request.Keyword),
             NormalizeOptionalCode(request.BookType, nameof(request.BookType), 32),
-            NormalizeOptionalCode(request.PageType, nameof(request.PageType), 32),
+            pageType,
             NormalizeOptionalCode(request.Category, nameof(request.Category), 32),
             request.IsActive,
             NormalizePageNumber(request.PageNumber),
@@ -50,7 +61,7 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
     {
         var normalizedTemplateCode = NormalizeRequiredCode(templateCode, nameof(templateCode), 64);
         var detail = await queryStore.GetDetailAsync(normalizedTemplateCode, cancellationToken);
-        return detail is null ? null : MapDetail(detail);
+        return detail is null || IsCoverTemplatePageType(detail.PageType) ? null : MapDetail(detail);
     }
 
     public async Task<CreateAlbumTemplateResponse> CreateAsync(
@@ -66,7 +77,7 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
             NormalizeRequiredText(request.Name, nameof(request.Name), 128),
             NormalizeOptionalText(request.Description, 512, nameof(request.Description)),
             NormalizeOptionalCode(request.BookType, nameof(request.BookType), 32),
-            NormalizeRequiredCode(request.PageType, nameof(request.PageType), 32),
+            NormalizeAlbumTemplatePageType(request.PageType, nameof(request.PageType)),
             NormalizeOptionalCode(request.Category, nameof(request.Category), 32),
             NormalizeOptionalCode(request.ThemeCode, nameof(request.ThemeCode), 64),
             NormalizeSchemaVersion(request.SchemaVersion, jsonSource),
@@ -95,12 +106,18 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
         ArgumentNullException.ThrowIfNull(request);
 
         var normalizedTemplateCode = NormalizeRequiredCode(templateCode, nameof(templateCode), 64);
+        var existing = await queryStore.GetDetailAsync(normalizedTemplateCode, cancellationToken);
+        if (existing is null || IsCoverTemplatePageType(existing.PageType))
+        {
+            return null;
+        }
+
         var jsonSource = NormalizeRequiredJsonSource(request.JsonSource, nameof(request.JsonSource));
         var command = new AlbumTemplateUpdateCommandModel(
             NormalizeRequiredText(request.Name, nameof(request.Name), 128),
             NormalizeOptionalText(request.Description, 512, nameof(request.Description)),
             NormalizeOptionalCode(request.BookType, nameof(request.BookType), 32),
-            NormalizeRequiredCode(request.PageType, nameof(request.PageType), 32),
+            NormalizeAlbumTemplatePageType(request.PageType, nameof(request.PageType)),
             NormalizeOptionalCode(request.Category, nameof(request.Category), 32),
             NormalizeOptionalCode(request.ThemeCode, nameof(request.ThemeCode), 64),
             NormalizeSchemaVersion(request.SchemaVersion, jsonSource),
@@ -113,6 +130,22 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
 
         var result = await queryStore.UpdateAsync(normalizedTemplateCode, command, cancellationToken);
         return result is null ? null : MapDetail(result);
+    }
+
+    public async Task<bool> DeleteAsync(
+        string templateCode,
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        var normalizedTemplateCode = NormalizeRequiredCode(templateCode, nameof(templateCode), 64);
+        return await queryStore.DeleteAsync(normalizedTemplateCode, cancellationToken);
+    }
+
+    public async Task<int> DeleteAllAsync(
+        RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        return await queryStore.DeleteAllAsync(cancellationToken);
     }
 
     private static string? NormalizeKeyword(string? keyword)
@@ -159,6 +192,17 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
         if (normalized is null)
         {
             throw new ArgumentException("Value is required.", parameterName);
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeAlbumTemplatePageType(string? value, string parameterName)
+    {
+        var normalized = NormalizeRequiredCode(value, parameterName, 32);
+        if (IsCoverTemplatePageType(normalized))
+        {
+            throw new ArgumentException("Cover templates are managed by the cover-templates APIs.", parameterName);
         }
 
         return normalized;
@@ -267,6 +311,11 @@ public sealed class AlbumTemplateService(IAlbumTemplateQueryStore queryStore) : 
         }
 
         return pageSize > MaxPageSize ? MaxPageSize : pageSize;
+    }
+
+    private static bool IsCoverTemplatePageType(string? pageType)
+    {
+        return string.Equals(pageType, CoverTemplatePageType, StringComparison.OrdinalIgnoreCase);
     }
 
     private static AlbumTemplateListItemResponse MapListItem(AlbumTemplateListItemQueryModel item)
