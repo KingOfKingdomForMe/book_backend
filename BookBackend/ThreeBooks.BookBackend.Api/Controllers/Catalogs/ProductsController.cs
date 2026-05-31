@@ -16,7 +16,7 @@ public sealed class ProductsController(ICatalogService catalogService) : ApiCont
     /// 分页查询商品列表。
     /// </summary>
     /// <remarks>
-    /// 可以按分类 ID、分类别名或关键字筛选。推荐商品列表页优先使用分页参数，避免一次性拉取过多数据。
+    /// 可以按分类 ID、分类别名或关键字筛选。返回结果同时包含当前产品绑定的默认相册编码，便于前端在选择产品后直接关联默认相册初始化作品。
     /// </remarks>
     /// <param name="request">商品列表查询参数，包含分类过滤条件、关键字和分页信息。</param>
     /// <param name="cancellationToken">请求取消令牌。</param>
@@ -35,7 +35,7 @@ public sealed class ProductsController(ICatalogService catalogService) : ApiCont
     /// 获取单个商品详情。
     /// </summary>
     /// <remarks>
-    /// 适用于商品详情页加载。返回结果通常包含 SKU、价格及商品展示信息。
+    /// 适用于商品详情页加载。返回结果通常包含 SKU、价格及商品展示信息，以及当前产品绑定的默认相册编码。
     /// </remarks>
     /// <param name="id">商品主键标识。</param>
     /// <param name="cancellationToken">请求取消令牌。</param>

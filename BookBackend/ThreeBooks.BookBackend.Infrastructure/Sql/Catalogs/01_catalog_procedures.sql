@@ -106,10 +106,12 @@ BEGIN
         category.name AS CategoryName,
         category.slug AS CategorySlug,
         spu.spu_code AS SpuCode,
+        default_album.album_code AS DefaultAlbumCode,
         spu.name AS Name,
         spu.subtitle AS Subtitle,
         spu.content_source AS ContentSource,
         COALESCE(price.starting_price, 0) AS StartingPrice,
+        COALESCE(image_limits.upload_image_count, 0) AS UploadImageCount,
         spu.sort_order AS SortOrder
     FROM catalog_product_spu spu
     INNER JOIN catalog_category category ON category.id = spu.category_id AND category.is_active = 1
@@ -125,6 +127,15 @@ BEGIN
         WHERE sku.is_active = 1
         GROUP BY sku.spu_id
     ) price ON price.spu_id = spu.id
+    LEFT JOIN (
+        SELECT
+            sku.spu_id,
+            MAX(COALESCE(sku.max_pages, sku.min_pages, 0)) AS upload_image_count
+        FROM catalog_product_sku sku
+        WHERE sku.is_active = 1
+        GROUP BY sku.spu_id
+    ) image_limits ON image_limits.spu_id = spu.id
+        LEFT JOIN default_album default_album ON default_album.product_spu_id = spu.id AND default_album.is_active = 1
     WHERE spu.is_active = 1
         AND (p_category_id IS NULL OR spu.category_id = p_category_id)
         AND (p_category_slug IS NULL OR category.slug COLLATE utf8mb4_unicode_ci = p_category_slug COLLATE utf8mb4_unicode_ci)
@@ -146,10 +157,12 @@ BEGIN
         spu.id AS Id,
         spu.category_id AS CategoryId,
         spu.spu_code AS SpuCode,
+        default_album.album_code AS DefaultAlbumCode,
         spu.name AS Name,
         spu.subtitle AS Subtitle,
         spu.content_source AS ContentSource
     FROM catalog_product_spu spu
+    LEFT JOIN default_album default_album ON default_album.product_spu_id = spu.id AND default_album.is_active = 1
     WHERE spu.id = p_spu_id
       AND spu.is_active = 1;
 END $$

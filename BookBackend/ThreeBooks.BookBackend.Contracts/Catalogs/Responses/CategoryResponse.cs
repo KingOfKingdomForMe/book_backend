@@ -5,5 +5,4 @@ public sealed record CategoryResponse(
 	string Name,
 	string Slug,
 	int SortOrder,
-	int ProductCount,
-	IReadOnlyCollection<ProductListItemResponse> Products);
+	int ProductCount);

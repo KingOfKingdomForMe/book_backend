@@ -6,8 +6,10 @@ public sealed record ProductListItemResponse(
     string CategoryName,
     string CategorySlug,
     string SpuCode,
+    string? DefaultAlbumCode,
     string Name,
     string? Subtitle,
     string? ContentSource,
     decimal StartingPrice,
+    int UploadImageCount,
     int SortOrder);

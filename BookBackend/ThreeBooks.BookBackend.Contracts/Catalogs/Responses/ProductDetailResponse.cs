@@ -4,6 +4,7 @@ public sealed record ProductDetailResponse(
     int Id,
     int CategoryId,
     string SpuCode,
+    string? DefaultAlbumCode,
     string Name,
     string? Subtitle,
     string? ContentSource,

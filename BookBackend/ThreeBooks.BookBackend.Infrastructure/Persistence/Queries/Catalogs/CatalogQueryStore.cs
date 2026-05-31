@@ -12,7 +12,6 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
 {
     private const string GetCategoriesCountProcedure = "usp_Catalog_GetCategories_Count";
     private const string GetCategoriesListProcedure = "usp_Catalog_GetCategories_List";
-    private const string GetCategoryProductsProcedure = "usp_Catalog_GetCategoryProducts_ByCategoryIds";
     private const string GetProductsCountProcedure = "usp_Catalog_GetProducts_Count";
     private const string GetProductsListProcedure = "usp_Catalog_GetProducts_List";
     private const string GetProductDetailHeaderProcedure = "usp_Catalog_GetProductDetail_Header";
@@ -50,28 +49,6 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
                 cancellationToken: cancellationToken));
 
         var categoryRows = rows.ToArray();
-        var categoryIds = categoryRows.Select(row => row.Id).ToArray();
-
-        IReadOnlyDictionary<int, IReadOnlyCollection<ProductListItemResponse>> productsByCategory;
-
-        if (categoryIds.Length == 0)
-        {
-            productsByCategory = new Dictionary<int, IReadOnlyCollection<ProductListItemResponse>>();
-        }
-        else
-        {
-            var productRows = await connection.QueryAsync<ProductListItemRow>(
-                new CommandDefinition(
-                    GetCategoryProductsProcedure,
-                    new { p_category_ids = JoinCsv(categoryIds) },
-                    commandType: CommandType.StoredProcedure,
-                    cancellationToken: cancellationToken));
-
-            productsByCategory = productRows
-                .Select(MapProduct)
-                .GroupBy(product => product.CategoryId)
-                .ToDictionary(group => group.Key, group => (IReadOnlyCollection<ProductListItemResponse>)group.ToArray());
-        }
 
         var items = categoryRows
             .Select(row => new CategoryResponse(
@@ -79,8 +56,7 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
                 row.Name,
                 row.Slug,
                 row.SortOrder,
-                checked((int)row.ProductCount),
-                productsByCategory.GetValueOrDefault(checked((int)row.Id), Array.Empty<ProductListItemResponse>())))
+                checked((int)row.ProductCount)))
             .ToArray();
 
         return new PagedResult<CategoryResponse>(
@@ -172,6 +148,7 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
             checked((int)header.Id),
             checked((int)header.CategoryId),
             header.SpuCode,
+            header.DefaultAlbumCode,
             header.Name,
             header.Subtitle,
             header.ContentSource,
@@ -226,11 +203,6 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         return connection;
     }
 
-    private static string JoinCsv(IEnumerable<long> values)
-    {
-        return string.Join(',', values);
-    }
-
     private static ProductListItemResponse MapProduct(ProductListItemRow row)
     {
         return new ProductListItemResponse(
@@ -239,10 +211,12 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
             row.CategoryName,
             row.CategorySlug,
             row.SpuCode,
+            row.DefaultAlbumCode,
             row.Name,
             row.Subtitle,
             row.ContentSource,
             row.StartingPrice,
+                checked((int)row.UploadImageCount),
             row.SortOrder);
     }
 
@@ -265,16 +239,19 @@ public sealed class CatalogQueryStore(string connectionString) : ICatalogQuerySt
         string CategoryName,
         string CategorySlug,
         string SpuCode,
+        string? DefaultAlbumCode,
         string Name,
         string? Subtitle,
         string? ContentSource,
         decimal StartingPrice,
+        long UploadImageCount,
         int SortOrder);
 
     private sealed record ProductDetailHeader(
         long Id,
         long CategoryId,
         string SpuCode,
+        string? DefaultAlbumCode,
         string Name,
         string? Subtitle,
         string? ContentSource);
