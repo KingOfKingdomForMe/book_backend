@@ -85,13 +85,20 @@ public sealed class AlbumService(
             ? DefaultAlbumBookType
             : NormalizeCode(request.ProductCode, nameof(request.ProductCode), 32);
         var pagesCommand = BuildOptionalPagesWriteCommand(request.Pages);
-        if (pagesCommand is null && !string.IsNullOrWhiteSpace(request.ProductCode))
+        DefaultAlbumDetailQueryModel? defaultAlbum = null;
+        if (!string.IsNullOrWhiteSpace(request.ProductCode))
         {
-            pagesCommand = await BuildDefaultAlbumPagesWriteCommandAsync(
-                normalizedProductCode,
-                nameof(request.ProductCode),
-                cancellationToken);
+            defaultAlbum = await defaultAlbumQueryStore.GetActiveByProductCodeAsync(normalizedProductCode, cancellationToken);
+
+            if (pagesCommand is null)
+            {
+                pagesCommand = BuildDefaultAlbumPagesWriteCommand(
+                    defaultAlbum,
+                    nameof(request.ProductCode));
+            }
         }
+
+        var extraProperties = defaultAlbum?.ExtraProperties ?? Array.Empty<string>();
 
         AlbumCreateCommandModel BuildCommand(string shareCode)
         {
@@ -106,7 +113,8 @@ public sealed class AlbumService(
                 request.IsPublic,
                 DefaultAlbumVersionNo,
                 DefaultJsonSchemaVersion,
-                null);
+                null,
+                extraProperties);
         }
 
         var result = providedShareCode is null
@@ -197,9 +205,11 @@ public sealed class AlbumService(
             preview.Title,
             preview.Subtitle,
             preview.PageCount,
+            preview.ImageCount,
             preview.ViewCount,
             preview.ShareCount,
             ResolveProductCode(preview.ProductCode, preview.BookType),
+            preview.ExtraProperties,
             BuildShareUrl(preview.ShareCode),
             pages);
     }
@@ -325,6 +335,8 @@ public sealed class AlbumService(
             item.IsPublic,
             item.PageCount,
             item.ImageCount,
+            item.ImageCount,
+            item.ExtraProperties,
             item.ViewCount,
             item.ShareCount,
             item.IsPublic && !string.IsNullOrWhiteSpace(item.ShareCode) ? BuildShareUrl(item.ShareCode) : null,
@@ -444,12 +456,10 @@ public sealed class AlbumService(
         return requestPages is null ? null : BuildPagesWriteCommand(requestPages);
     }
 
-    private async Task<AlbumPagesWriteCommandModel> BuildDefaultAlbumPagesWriteCommandAsync(
-        string productCode,
-        string parameterName,
-        CancellationToken cancellationToken)
+    private AlbumPagesWriteCommandModel BuildDefaultAlbumPagesWriteCommand(
+        DefaultAlbumDetailQueryModel? defaultAlbum,
+        string parameterName)
     {
-        var defaultAlbum = await defaultAlbumQueryStore.GetActiveByProductCodeAsync(productCode, cancellationToken);
         if (defaultAlbum is null)
         {
             throw new ArgumentException("ProductCode does not have an active default album.", parameterName);

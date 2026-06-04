@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS default_album (
     product_spu_id BIGINT NULL COMMENT '-> catalog_product_spu.id, 一对一绑定的产品',
     name VARCHAR(128) NOT NULL COMMENT '默认相册名称',
     description VARCHAR(512) NULL COMMENT '默认相册说明',
+    extra_properties_json JSON NULL COMMENT '默认相册额外属性(JSON字符串数组)',
     book_type VARCHAR(32) NULL COMMENT '适用书册类型, NULL=通用',
     category VARCHAR(32) NULL COMMENT '默认相册分类',
     theme_code VARCHAR(64) NULL COMMENT '主题编码',

@@ -5,9 +5,11 @@ public sealed record AlbumPreviewDetailResponse(
     string Title,
     string? Subtitle,
     int PageCount,
+    int UploadedImageCount,
     long ViewCount,
     long ShareCount,
     string ProductCode,
+    IReadOnlyCollection<string> ExtraProperties,
     string ShareUrl,
     IReadOnlyCollection<AlbumPreviewPageSummaryResponse> Pages);
 

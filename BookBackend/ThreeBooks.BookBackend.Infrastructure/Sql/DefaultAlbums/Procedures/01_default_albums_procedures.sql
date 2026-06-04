@@ -54,6 +54,7 @@ BEGIN
         a.book_type AS BookType,
         a.category AS Category,
         a.theme_code AS ThemeCode,
+        a.extra_properties_json AS ExtraPropertiesJson,
         a.is_active AS IsActive,
         a.sort_order AS SortOrder,
         (
@@ -92,6 +93,7 @@ BEGIN
         a.book_type AS BookType,
         a.category AS Category,
         a.theme_code AS ThemeCode,
+        a.extra_properties_json AS ExtraPropertiesJson,
         a.preview_file_id AS PreviewFileId,
         a.created_by_user_id AS CreatedByUserId,
         a.is_active AS IsActive,
@@ -125,6 +127,7 @@ BEGIN
         a.book_type AS BookType,
         a.category AS Category,
         a.theme_code AS ThemeCode,
+        a.extra_properties_json AS ExtraPropertiesJson,
         a.preview_file_id AS PreviewFileId,
         a.created_by_user_id AS CreatedByUserId,
         a.is_active AS IsActive,
@@ -211,7 +214,9 @@ BEGIN
         t.id AS TemplateId,
         t.template_code AS TemplateCode
     FROM album_content_template t
-    WHERE FIND_IN_SET(t.template_code, p_template_codes) > 0;
+    WHERE FIND_IN_SET(
+        t.template_code COLLATE utf8mb4_unicode_ci,
+        p_template_codes COLLATE utf8mb4_unicode_ci) > 0;
 END $$
 
 CREATE PROCEDURE usp_DefaultAlbums_Create(
@@ -222,6 +227,7 @@ CREATE PROCEDURE usp_DefaultAlbums_Create(
     IN p_book_type VARCHAR(64),
     IN p_category VARCHAR(64),
     IN p_theme_code VARCHAR(64),
+    IN p_extra_properties_json LONGTEXT,
     IN p_preview_file_id BIGINT,
     IN p_created_by_user_id BIGINT,
     IN p_is_active TINYINT,
@@ -236,6 +242,7 @@ BEGIN
         book_type,
         category,
         theme_code,
+        extra_properties_json,
         preview_file_id,
         created_by_user_id,
         is_active,
@@ -248,6 +255,7 @@ BEGIN
         p_book_type,
         p_category,
         p_theme_code,
+        p_extra_properties_json,
         p_preview_file_id,
         p_created_by_user_id,
         p_is_active,
@@ -262,6 +270,7 @@ CREATE PROCEDURE usp_DefaultAlbums_Update(
     IN p_book_type VARCHAR(64),
     IN p_category VARCHAR(64),
     IN p_theme_code VARCHAR(64),
+    IN p_extra_properties_json LONGTEXT,
     IN p_preview_file_id BIGINT,
     IN p_created_by_user_id BIGINT,
     IN p_is_active TINYINT,
@@ -275,6 +284,7 @@ BEGIN
         book_type = p_book_type,
         category = p_category,
         theme_code = p_theme_code,
+        extra_properties_json = p_extra_properties_json,
         preview_file_id = p_preview_file_id,
         created_by_user_id = p_created_by_user_id,
         is_active = p_is_active,

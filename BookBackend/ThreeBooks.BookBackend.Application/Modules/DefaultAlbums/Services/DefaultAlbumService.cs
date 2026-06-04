@@ -68,6 +68,7 @@ public sealed class DefaultAlbumService(IDefaultAlbumQueryStore queryStore) : ID
             NormalizeOptionalCode(request.BookType, nameof(request.BookType), 32) ?? normalizedProductCode,
             NormalizeOptionalCode(request.Category, nameof(request.Category), 32),
             NormalizeOptionalCode(request.ThemeCode, nameof(request.ThemeCode), 64),
+            NormalizeExtraProperties(request.ExtraProperties, nameof(request.ExtraProperties)),
             NormalizeNullableId(request.PreviewFileId, nameof(request.PreviewFileId)),
             NormalizeNullableId(request.CreatedByUserId, nameof(request.CreatedByUserId)),
             request.IsActive,
@@ -100,6 +101,7 @@ public sealed class DefaultAlbumService(IDefaultAlbumQueryStore queryStore) : ID
             NormalizeOptionalCode(request.BookType, nameof(request.BookType), 32) ?? normalizedProductCode,
             NormalizeOptionalCode(request.Category, nameof(request.Category), 32),
             NormalizeOptionalCode(request.ThemeCode, nameof(request.ThemeCode), 64),
+            NormalizeExtraProperties(request.ExtraProperties, nameof(request.ExtraProperties)),
             NormalizeNullableId(request.PreviewFileId, nameof(request.PreviewFileId)),
             NormalizeNullableId(request.CreatedByUserId, nameof(request.CreatedByUserId)),
             request.IsActive,
@@ -200,6 +202,40 @@ public sealed class DefaultAlbumService(IDefaultAlbumQueryStore queryStore) : ID
         return sortOrder < 0 ? 0 : sortOrder;
     }
 
+    private static IReadOnlyCollection<string> NormalizeExtraProperties(
+        IReadOnlyCollection<string>? extraProperties,
+        string parameterName)
+    {
+        if (extraProperties is null || extraProperties.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var normalized = new List<string>(extraProperties.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var extraProperty in extraProperties)
+        {
+            var value = extraProperty?.Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            if (value.Length > 128)
+            {
+                throw new ArgumentException("Value length cannot exceed 128 characters.", parameterName);
+            }
+
+            if (seen.Add(value))
+            {
+                normalized.Add(value);
+            }
+        }
+
+        return normalized;
+    }
+
     private static IReadOnlyCollection<DefaultAlbumTemplateAssignmentModel> NormalizeTemplateAssignments(
         IReadOnlyCollection<DefaultAlbumTemplateAssignmentRequest>? templates,
         string parameterName)
@@ -254,6 +290,7 @@ public sealed class DefaultAlbumService(IDefaultAlbumQueryStore queryStore) : ID
             item.BookType,
             item.Category,
             item.ThemeCode,
+            item.ExtraProperties,
             BuildOptionalProxyUrl(item.PreviewFile),
             item.TemplateCount,
             item.IsActive,
@@ -274,6 +311,7 @@ public sealed class DefaultAlbumService(IDefaultAlbumQueryStore queryStore) : ID
             item.BookType,
             item.Category,
             item.ThemeCode,
+            item.ExtraProperties,
             BuildOptionalProxyUrl(item.PreviewFile),
             item.PreviewFileId,
             item.CreatedByUserId,

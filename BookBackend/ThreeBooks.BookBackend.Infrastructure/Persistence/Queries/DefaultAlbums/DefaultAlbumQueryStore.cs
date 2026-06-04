@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using Dapper;
 using MySqlConnector;
 using ThreeBooks.BookBackend.Application.Modules.DefaultAlbums.Interfaces;
@@ -161,6 +162,7 @@ public sealed class DefaultAlbumQueryStore(string connectionString) : IDefaultAl
                         p_book_type = NormalizeNullable(command.BookType),
                         p_category = NormalizeNullable(command.Category),
                         p_theme_code = NormalizeNullable(command.ThemeCode),
+                        p_extra_properties_json = SerializeStringCollection(command.ExtraProperties),
                         p_preview_file_id = command.PreviewFileId,
                         p_created_by_user_id = command.CreatedByUserId,
                         p_is_active = command.IsActive,
@@ -280,6 +282,7 @@ public sealed class DefaultAlbumQueryStore(string connectionString) : IDefaultAl
                         p_book_type = NormalizeNullable(command.BookType),
                         p_category = NormalizeNullable(command.Category),
                         p_theme_code = NormalizeNullable(command.ThemeCode),
+                        p_extra_properties_json = SerializeStringCollection(command.ExtraProperties),
                         p_preview_file_id = command.PreviewFileId,
                         p_created_by_user_id = command.CreatedByUserId,
                         p_is_active = command.IsActive,
@@ -377,6 +380,7 @@ public sealed class DefaultAlbumQueryStore(string connectionString) : IDefaultAl
             row.BookType,
             row.Category,
             row.ThemeCode,
+            ParseStringCollection(row.ExtraPropertiesJson),
             BuildPreviewFile(row.PreviewBucket, row.PreviewObjectKey),
             row.TemplateCount,
             row.IsActive,
@@ -397,6 +401,7 @@ public sealed class DefaultAlbumQueryStore(string connectionString) : IDefaultAl
             row.BookType,
             row.Category,
             row.ThemeCode,
+            ParseStringCollection(row.ExtraPropertiesJson),
             row.PreviewFileId,
             BuildPreviewFile(row.PreviewBucket, row.PreviewObjectKey),
             row.CreatedByUserId,
@@ -497,6 +502,45 @@ public sealed class DefaultAlbumQueryStore(string connectionString) : IDefaultAl
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
+    private static string? SerializeStringCollection(IReadOnlyCollection<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        var normalized = values
+            .Select(value => value?.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return normalized.Length == 0 ? null : JsonSerializer.Serialize(normalized);
+    }
+
+    private static IReadOnlyCollection<string> ParseStringCollection(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return (JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>())
+                .Select(value => value?.Trim())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
     private class DefaultAlbumListRow
     {
         public long AlbumId { get; init; }
@@ -514,6 +558,8 @@ public sealed class DefaultAlbumQueryStore(string connectionString) : IDefaultAl
         public string? Category { get; init; }
 
         public string? ThemeCode { get; init; }
+
+        public string? ExtraPropertiesJson { get; init; }
 
         public bool IsActive { get; init; }
 

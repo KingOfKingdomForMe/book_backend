@@ -139,7 +139,8 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
                     p_spu_id = spuId.Value,
                     p_share_code = command.ShareCode,
                     p_is_public = command.IsPublic,
-                    p_shared_at = sharedAt
+                    p_shared_at = sharedAt,
+                    p_extra_properties_json = SerializeStringCollection(command.ExtraProperties)
                 },
                 transaction: transaction,
                 commandType: CommandType.StoredProcedure,
@@ -476,8 +477,10 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             projectRow.BookType,
             projectRow.ProductCode,
             projectRow.PageCount,
+            projectRow.ImageCount,
             projectRow.ViewCount,
             projectRow.ShareCount,
+            ParseStringCollection(projectRow.ExtraPropertiesJson),
             projectRow.SharedVersionId,
             pages);
     }
@@ -650,6 +653,7 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
             row.IsPublic,
             row.PageCount,
             row.ImageCount,
+            ParseStringCollection(row.ExtraPropertiesJson),
             row.ViewCount,
             row.ShareCount,
             row.CreatedAtUtc,
@@ -713,6 +717,45 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
+    private static string? SerializeStringCollection(IReadOnlyCollection<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        var normalized = values
+            .Select(value => value?.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return normalized.Length == 0 ? null : JsonSerializer.Serialize(normalized);
+    }
+
+    private static IReadOnlyCollection<string> ParseStringCollection(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return (JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>())
+                .Select(value => value?.Trim())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
     private sealed class AlbumListRow
     {
         public long ProjectId { get; init; }
@@ -733,6 +776,8 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
 
         public int ImageCount { get; init; }
 
+        public string? ExtraPropertiesJson { get; init; }
+
         public long ViewCount { get; init; }
 
         public long ShareCount { get; init; }
@@ -750,8 +795,10 @@ public sealed class AlbumQueryStore(string connectionString) : IAlbumQueryStore
         string BookType,
         string? ProductCode,
         int PageCount,
+        int ImageCount,
         long ViewCount,
         long ShareCount,
+        string? ExtraPropertiesJson,
         long SharedVersionId);
 
     private sealed record ProjectWriteRow(

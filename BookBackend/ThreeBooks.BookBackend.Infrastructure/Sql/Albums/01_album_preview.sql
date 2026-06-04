@@ -12,6 +12,7 @@ ALTER TABLE book_project
     ADD COLUMN shared_at DATETIME NULL COMMENT 'When preview was published',
     ADD COLUMN view_count BIGINT NOT NULL DEFAULT 0 COMMENT 'Aggregated preview views',
     ADD COLUMN share_count BIGINT NOT NULL DEFAULT 0 COMMENT 'Aggregated preview shares',
+    ADD COLUMN extra_properties_json JSON NULL COMMENT 'Album extra properties copied from default album',
     ADD UNIQUE KEY uk_book_project_share_code (share_code),
     ADD KEY idx_book_project_public_share (is_public, share_code);
 

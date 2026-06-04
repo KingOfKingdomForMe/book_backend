@@ -27,6 +27,7 @@ public sealed class DefaultAlbumServiceTests
                     "balbum",
                     "story",
                     "spring",
+                    ["starter-layout", "growth-memory"],
                     91,
                     new DefaultAlbumStoredFileReference("preview", "default-albums/growth.jpg"),
                     9001,
@@ -59,6 +60,7 @@ public sealed class DefaultAlbumServiceTests
         Assert.Equal("growth-default", response!.AlbumCode);
         Assert.Equal("balbum", response.ProductCode);
         Assert.Equal(1, response.TemplateCount);
+        Assert.Equal(["starter-layout", "growth-memory"], response.ExtraProperties);
         Assert.Equal("/api/files/content/preview/default-albums/growth.jpg", response.PreviewUrl);
 
         var template = Assert.Single(response.Templates);

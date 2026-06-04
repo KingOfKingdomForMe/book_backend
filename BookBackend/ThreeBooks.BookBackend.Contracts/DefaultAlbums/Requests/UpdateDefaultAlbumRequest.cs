@@ -14,4 +14,5 @@ public sealed record UpdateDefaultAlbumRequest(
     long? CreatedByUserId,
     bool IsActive = true,
     int SortOrder = 0,
-    IReadOnlyCollection<DefaultAlbumTemplateAssignmentRequest>? Templates = null);
+    IReadOnlyCollection<DefaultAlbumTemplateAssignmentRequest>? Templates = null,
+    IReadOnlyCollection<string>? ExtraProperties = null);

@@ -9,6 +9,7 @@ public sealed record DefaultAlbumDetailResponse(
     string? BookType,
     string? Category,
     string? ThemeCode,
+    IReadOnlyCollection<string> ExtraProperties,
     string? PreviewUrl,
     long? PreviewFileId,
     long? CreatedByUserId,

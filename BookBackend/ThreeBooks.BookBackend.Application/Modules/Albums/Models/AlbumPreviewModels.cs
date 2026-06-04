@@ -20,6 +20,7 @@ public sealed record AlbumListItemQueryModel(
     bool IsPublic,
     int PageCount,
     int ImageCount,
+    IReadOnlyCollection<string> ExtraProperties,
     long ViewCount,
     long ShareCount,
     DateTime CreatedAtUtc,
@@ -33,8 +34,10 @@ public sealed record AlbumPreviewQueryModel(
     string BookType,
     string? ProductCode,
     int PageCount,
+    int ImageCount,
     long ViewCount,
     long ShareCount,
+    IReadOnlyCollection<string> ExtraProperties,
     long SharedVersionId,
     IReadOnlyCollection<AlbumPreviewPageSummaryModel> Pages);
 
@@ -78,7 +81,8 @@ public sealed record AlbumCreateCommandModel(
     bool IsPublic,
     int VersionNo,
     string SnapshotSchemaVersion,
-    string? RenderVersion);
+    string? RenderVersion,
+    IReadOnlyCollection<string> ExtraProperties);
 
 public sealed record AlbumCreateResultModel(
     long ProjectId,

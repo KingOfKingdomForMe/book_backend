@@ -143,7 +143,8 @@ public static class ApplicationInitializationExtensions
         }
 
         if (normalizedPath.StartsWith("Albums/", StringComparison.OrdinalIgnoreCase)
-            && normalizedPath.Contains("procedures", StringComparison.OrdinalIgnoreCase))
+            && (normalizedPath.Contains("procedures", StringComparison.OrdinalIgnoreCase)
+                || normalizedPath.Contains("upgrade", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }

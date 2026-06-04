@@ -9,6 +9,7 @@ public sealed record DefaultAlbumListItemResponse(
     string? BookType,
     string? Category,
     string? ThemeCode,
+    IReadOnlyCollection<string> ExtraProperties,
     string? PreviewUrl,
     int TemplateCount,
     bool IsActive,

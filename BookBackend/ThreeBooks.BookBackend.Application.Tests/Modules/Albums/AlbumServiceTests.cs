@@ -38,6 +38,7 @@ public sealed class AlbumServiceTests
                     true,
                     24,
                     32,
+                        ["travel-memory", "story-starter"],
                     120,
                     8,
                     createdAtUtc,
@@ -57,7 +58,50 @@ public sealed class AlbumServiceTests
         Assert.Equal("story-album-001", item.ShareCode);
         Assert.Equal("balbum", item.ProductCode);
         Assert.Equal("/albums/story-album-001", item.PreviewUrl);
+        Assert.Equal(32, item.UploadedImageCount);
+        Assert.Equal(["travel-memory", "story-starter"], item.ExtraProperties);
         Assert.Equal(updatedAtUtc, item.UpdatedAtUtc);
+    }
+
+    [Fact]
+    public async Task GetPreviewAsync_ReturnsUploadedImageCountAndExtraProperties()
+    {
+        var queryStore = new FakeAlbumQueryStore
+        {
+            GetPreviewHandler = shareCode => Task.FromResult<AlbumPreviewQueryModel?>(
+                new AlbumPreviewQueryModel(
+                    11,
+                    shareCode,
+                    "我们的纪念",
+                    "把时间折成书页",
+                    "balbum",
+                    "balbum",
+                    24,
+                    32,
+                    120,
+                    8,
+                    ["travel-memory", "story-starter"],
+                    1001,
+                    [
+                        new AlbumPreviewPageSummaryModel(
+                            1,
+                            "封面",
+                            "cover",
+                            "{\"schemaVersion\":\"2.0\",\"blocks\":[]}",
+                            null,
+                            null,
+                            null,
+                            true)
+                    ]))
+        };
+
+        var service = new AlbumService(queryStore, new FakeFileStorageService(), new FakeDefaultAlbumQueryStore());
+
+        var response = await service.GetPreviewAsync("story-album-001", Context, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Equal(32, response!.UploadedImageCount);
+        Assert.Equal(["travel-memory", "story-starter"], response.ExtraProperties);
     }
 
     [Fact]
@@ -158,6 +202,7 @@ public sealed class AlbumServiceTests
                     productCode,
                     "product-default",
                     "default-xcalbum",
+                    ["product-default", "starter-layout"],
                     null,
                     null,
                     null,
@@ -210,6 +255,7 @@ public sealed class AlbumServiceTests
         Assert.NotNull(capturedCommand);
         Assert.Equal("xcalbum", capturedCommand!.BookType);
         Assert.Equal("xcalbum", capturedCommand.ProductCode);
+        Assert.Equal(["product-default", "starter-layout"], capturedCommand.ExtraProperties);
 
         Assert.NotNull(capturedPages);
         Assert.Equal(2, capturedPages!.Pages.Count);
@@ -223,6 +269,8 @@ public sealed class AlbumServiceTests
         public Func<AlbumListFilter, Task<PagedResult<AlbumListItemQueryModel>>>? GetListHandler { get; init; }
 
         public Func<AlbumCreateCommandModel, AlbumPagesWriteCommandModel?, Task<AlbumCreateResultModel>>? CreateAlbumHandler { get; init; }
+
+        public Func<string, Task<AlbumPreviewQueryModel?>>? GetPreviewHandler { get; init; }
 
         public Task<PagedResult<AlbumListItemQueryModel>> GetListAsync(
             AlbumListFilter filter,
@@ -255,7 +303,9 @@ public sealed class AlbumServiceTests
 
         public Task<AlbumPreviewQueryModel?> GetPreviewAsync(string shareCode, CancellationToken cancellationToken)
         {
-            throw new NotSupportedException();
+            return GetPreviewHandler is null
+                ? throw new NotSupportedException()
+                : GetPreviewHandler(shareCode);
         }
 
         public Task<AlbumPreviewPageQueryModel?> GetPageAsync(string shareCode, int pageNumber, CancellationToken cancellationToken)

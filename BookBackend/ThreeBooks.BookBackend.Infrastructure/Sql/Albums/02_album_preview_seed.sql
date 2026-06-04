@@ -322,7 +322,8 @@ INSERT INTO book_project (
     shared_version_id,
     shared_at,
     view_count,
-    share_count)
+    share_count,
+    extra_properties_json)
 VALUES (
     @sample_project_id,
     @sample_user_id,
@@ -342,7 +343,8 @@ VALUES (
     NULL,
     '2026-04-20 10:00:00',
     0,
-    0);
+    0,
+    JSON_ARRAY('cover-required', 'story-starter', 'travel-memory'));
 
 INSERT INTO book_project_version (
     id,
@@ -673,7 +675,8 @@ INSERT INTO book_project (
     shared_version_id,
     shared_at,
     view_count,
-    share_count)
+    share_count,
+    extra_properties_json)
 VALUES
 (
     @sample_list_public_project_id,
@@ -694,7 +697,8 @@ VALUES
     NULL,
     '2026-05-31 09:30:00',
     35,
-    6
+    6,
+    JSON_ARRAY('travel-memory', 'public-showcase')
 ),
 (
     @sample_list_private_project_id,
@@ -715,7 +719,8 @@ VALUES
     NULL,
     NULL,
     0,
-    0
+    0,
+    JSON_ARRAY('draft', 'needs-cover-photo')
 ),
 (
     @sample_other_user_project_id,
@@ -736,5 +741,6 @@ VALUES
     NULL,
     '2026-05-31 08:30:00',
     9,
-    1
+    1,
+    JSON_ARRAY('family-memory')
 );

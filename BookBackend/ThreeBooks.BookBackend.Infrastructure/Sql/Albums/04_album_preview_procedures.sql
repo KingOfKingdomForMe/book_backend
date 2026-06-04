@@ -73,6 +73,7 @@ BEGIN
         p.is_public AS IsPublic,
         p.page_count AS PageCount,
         p.image_count AS ImageCount,
+        p.extra_properties_json AS ExtraPropertiesJson,
         p.view_count AS ViewCount,
         p.share_count AS ShareCount,
         p.created_at AS CreatedAtUtc,
@@ -93,7 +94,8 @@ CREATE PROCEDURE usp_Album_InsertProject(
     IN p_spu_id BIGINT,
     IN p_share_code VARCHAR(64),
     IN p_is_public TINYINT,
-    IN p_shared_at DATETIME
+    IN p_shared_at DATETIME,
+    IN p_extra_properties_json LONGTEXT
 )
 BEGIN
     INSERT INTO book_project (
@@ -112,7 +114,8 @@ BEGIN
         shared_version_id,
         shared_at,
         view_count,
-        share_count)
+        share_count,
+        extra_properties_json)
     VALUES (
         p_user_id,
         p_book_type,
@@ -129,7 +132,8 @@ BEGIN
         NULL,
         p_shared_at,
         0,
-        0);
+        0,
+        p_extra_properties_json);
 END $$
 
 CREATE PROCEDURE usp_Album_InsertVersion(
@@ -182,8 +186,10 @@ BEGIN
         p.book_type AS BookType,
         spu.spu_code AS ProductCode,
         p.page_count AS PageCount,
+        p.image_count AS ImageCount,
         p.view_count AS ViewCount,
         p.share_count AS ShareCount,
+        p.extra_properties_json AS ExtraPropertiesJson,
         p.shared_version_id AS SharedVersionId
     FROM book_project p
     LEFT JOIN catalog_product_spu spu ON spu.id = p.spu_id AND spu.is_active = 1

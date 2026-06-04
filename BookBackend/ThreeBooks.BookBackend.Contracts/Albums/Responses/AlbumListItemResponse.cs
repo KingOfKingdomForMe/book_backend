@@ -10,6 +10,8 @@ public sealed record AlbumListItemResponse(
     bool IsPublic,
     int PageCount,
     int ImageCount,
+    int UploadedImageCount,
+    IReadOnlyCollection<string> ExtraProperties,
     long ViewCount,
     long ShareCount,
     string? PreviewUrl,
